@@ -1,0 +1,24 @@
+# Model weights and datasets are never committed (see configs/ for pinned versions)
+models/
+*.gguf
+*.safetensors
+data/
+datasets/
+
+# Raw run outputs and profiler dumps (summaries/figures are committed explicitly)
+results/raw/
+*.nsys-rep
+*.qdrep
+*.sqlite
+*.log
+
+# Local builds and environments
+build/
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Local notes and credentials
+.env
+*.local.*
