@@ -1,0 +1,73 @@
+diff --git a/ggml/src/ggml-cuda/ggml-cuda.cu b/ggml/src/ggml-cuda/ggml-cuda.cu
+index 7c45d0d1f..7b683bde7 100644
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -1878,6 +1878,12 @@ static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
+     bool use_mul_mat_vec_q = ggml_is_quantized(src0->type) && !bad_padding_clear && src1->type == GGML_TYPE_F32 &&
+                              dst->type == GGML_TYPE_F32 && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE;
+ 
++    // E8 experiment: keep the unfused path when E8_MMQ_K redirects this mul_mat to MMQ
++    static const char * e8_mmq_k = getenv("E8_MMQ_K");
++    if (e8_mmq_k && src1->ne[1] == 1 && src0->ne[0] <= atoll(e8_mmq_k)) {
++        use_mul_mat_vec_q = false;
++    }
++
+     // fusion is not universally faster on Pascal
+     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+     if (cc <= GGML_CUDA_CC_PASCAL) {
+@@ -1991,10 +1997,18 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
+         ggml_cuda_mul_mat_f(ctx, src0, src1, nullptr, dst);
+         return;
+     }
+-    if (ggml_cuda_should_use_mmvq(src0->type, cc, ne11)) {
++    // E8 experiment: E8_MMQ_K=<K> routes single-column quantized mul_mat with ne00 <= K to MMQ
++    static const char * e8_mmq_k = getenv("E8_MMQ_K");
++    const bool e8_force_mmq = e8_mmq_k && ne11 == 1 && src0->ne[0] <= atoll(e8_mmq_k) &&
++                              ggml_cuda_should_use_mmq(src0->type, cc, 8, /*n_experts =*/ 0);
++    if (!e8_force_mmq && ggml_cuda_should_use_mmvq(src0->type, cc, ne11)) {
+         ggml_cuda_mul_mat_vec_q(ctx, src0, src1, nullptr, dst);
+         return;
+     }
++    if (e8_force_mmq) {
++        ggml_cuda_mul_mat_q(ctx, src0, src1, nullptr, dst);
++        return;
++    }
+     if (ggml_cuda_should_use_mmq(src0->type, cc, ne11, /*n_experts =*/ 0)) {
+         ggml_cuda_mul_mat_q(ctx, src0, src1, nullptr, dst);
+         return;
+diff --git a/ggml/src/ggml-cuda/mmvq.cu b/ggml/src/ggml-cuda/mmvq.cu
+index 8068ba364..51d951998 100644
+--- a/ggml/src/ggml-cuda/mmvq.cu
++++ b/ggml/src/ggml-cuda/mmvq.cu
+@@ -1150,6 +1150,12 @@ static void mul_mat_vec_q_switch_ncols_dst(
+             use = false;
+         }
+ 
++        // E8 experiment: E8_SMALLK=0/1 forces the small-K path off/on
++        static const char * e8_smallk = getenv("E8_SMALLK");
++        if (e8_smallk) {
++            use = atoi(e8_smallk) != 0 && nwarps > 1;
++        }
++
+         return use;
+     };
+ 
+diff --git a/tests/test-backend-ops.cpp b/tests/test-backend-ops.cpp
+index ba7f7eb4e..0d99ced58 100644
+--- a/tests/test-backend-ops.cpp
++++ b/tests/test-backend-ops.cpp
+@@ -12045,6 +12045,14 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
+ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
+     std::vector<std::unique_ptr<test_case>> test_cases;
+ 
++    // E8: DSpark Markov head GEMV (markov_w2: K=256 x 128000 vocab, one column), plus a long-K reference
++    for (ggml_type type : {GGML_TYPE_Q8_0, GGML_TYPE_Q4_0, GGML_TYPE_Q4_K, GGML_TYPE_Q6_K, GGML_TYPE_F16}) {
++        // same element count at every K, so time differences come from the K/row shape
++        for (int64_t k : {256, 512, 1024, 2048}) {
++            test_cases.emplace_back(new test_mul_mat(type, GGML_TYPE_F32, 128000*256/k, 1, k, {1, 1}, {1, 1}));
++        }
++    }
++
+     // SWIGLU at a 27B-class FFN width, fused [gate|up] vs split operands
+     // note: same bytes either way, so a backend that indexes them differently shows it here
+     for (ggml_type type : {GGML_TYPE_F16, GGML_TYPE_F32, GGML_TYPE_BF16}) {

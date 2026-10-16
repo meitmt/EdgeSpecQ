@@ -1,0 +1,89 @@
+diff --git a/ggml/src/ggml-cuda/common.cuh b/ggml/src/ggml-cuda/common.cuh
+index fea1cf9c4..d9c1782d9 100644
+--- a/ggml/src/ggml-cuda/common.cuh
++++ b/ggml/src/ggml-cuda/common.cuh
+@@ -1177,6 +1177,7 @@ struct ggml_cuda_device_info {
+         size_t  smpb;                           // max. shared memory per block
+         size_t  smpbo;                          // max. shared memory per block (with opt-in)
+         bool    integrated;                     // Device is integrated as opposed to discrete
++        bool    igpu;                           // physically integrated GPU, only used for kernel selection
+         bool    vmm;                            // virtual memory support
+         size_t  vmm_granularity;                // granularity of virtual memory
+         size_t  total_vram;
+diff --git a/ggml/src/ggml-cuda/ggml-cuda.cu b/ggml/src/ggml-cuda/ggml-cuda.cu
+index 7c45d0d1f..754937d11 100644
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -350,6 +350,7 @@ static ggml_cuda_device_info ggml_cuda_init() {
+         info.default_tensor_split[id] = total_vram;
+         total_vram += device_vram;
+         info.devices[id].integrated = false; // Temporarily disabled due to issues with corrupted output (e.g. #15034)
++        info.devices[id].igpu       = prop.integrated > 0;
+         info.devices[id].nsm        = prop.multiProcessorCount;
+         info.devices[id].smpb       = prop.sharedMemPerBlock;
+         info.devices[id].warp_size  = prop.warpSize;
+@@ -1866,6 +1867,28 @@ static bool ggml_cuda_should_fuse_mul_mat_vec_f(const ggml_tensor * tensor) {
+     return use_mul_mat_vec_f;
+ }
+ 
++// a single column with short rows leaves most MMVQ threads idle, the MMQ tiles are faster there
++static bool ggml_cuda_should_use_mmq_short_k(const ggml_tensor * src0, int64_t ne11, int cc) {
++    if (ne11 != 1 || src0->ne[0] > 256 || !GGML_CUDA_CC_IS_NVIDIA(cc) || !turing_mma_available(cc)) {
++        return false;
++    }
++    switch (src0->type) {
++        case GGML_TYPE_Q4_0:
++        case GGML_TYPE_Q4_1:
++        case GGML_TYPE_Q5_0:
++        case GGML_TYPE_Q5_1:
++        case GGML_TYPE_Q8_0:
++        case GGML_TYPE_Q2_K:
++        case GGML_TYPE_Q3_K:
++        case GGML_TYPE_Q4_K:
++        case GGML_TYPE_Q5_K:
++        case GGML_TYPE_Q6_K:
++            return ggml_cuda_should_use_mmq(src0->type, cc, ne11, /*n_experts =*/ 0);
++        default:
++            return false;
++    }
++}
++
+ static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
+     ggml_tensor *       src0 = tensor->src[0];
+     ggml_tensor *       src1 = tensor->src[1];
+@@ -1880,6 +1903,9 @@ static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
+ 
+     // fusion is not universally faster on Pascal
+     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
++    if (tensor->op == GGML_OP_MUL_MAT && ggml_cuda_should_use_mmq_short_k(src0, src1->ne[1], cc)) {
++        return false;
++    }
+     if (cc <= GGML_CUDA_CC_PASCAL) {
+         return false;
+     }
+@@ -1991,7 +2017,7 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
+         ggml_cuda_mul_mat_f(ctx, src0, src1, nullptr, dst);
+         return;
+     }
+-    if (ggml_cuda_should_use_mmvq(src0->type, cc, ne11)) {
++    if (ggml_cuda_should_use_mmvq(src0->type, cc, ne11) && !ggml_cuda_should_use_mmq_short_k(src0, ne11, cc)) {
+         ggml_cuda_mul_mat_vec_q(ctx, src0, src1, nullptr, dst);
+         return;
+     }
+diff --git a/ggml/src/ggml-cuda/mmvq.cu b/ggml/src/ggml-cuda/mmvq.cu
+index 8068ba364..4fe02837f 100644
+--- a/ggml/src/ggml-cuda/mmvq.cu
++++ b/ggml/src/ggml-cuda/mmvq.cu
+@@ -1122,6 +1122,12 @@ static void mul_mat_vec_q_switch_ncols_dst(
+         const int  nwarps = calc_nwarps(type, c_ncols_dst, table_id);
+         bool       use    = nwarps > 1 && blocks_per_row_x < nwarps * blocks_per_iter_1warp;
+ 
++        // integrated GPUs (e.g. Jetson) have a small L2, a single column is bound by DRAM latency at any K
++        // and more rows per block keep more loads in flight
++        if (c_ncols_dst == 1 && !has_ids && GGML_CUDA_CC_IS_NVIDIA(cc) && ggml_cuda_info().devices[device].igpu) {
++            use = nwarps > 1;
++        }
++
+         constexpr std::array<ggml_type, 2> iq_slow_turing = {
+             GGML_TYPE_IQ3_XXS,
+             GGML_TYPE_IQ3_S,
