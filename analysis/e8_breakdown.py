@@ -6,9 +6,11 @@ from the text probe (LFM2 chat format) and aggregates the "E8 per_round_ms" line
 draft_decode / draft_sample / draft_other / verify / inject / tgt_sample / other.
 
 usage: e8_breakdown.py <llama_dir> <target.gguf> [--drafters none,F16,Q8_0,...] [--n 256] [--prompts 5] [--extra "..."]
-Drafter files are looked up under $EDGESPECQ_HOME/models/{draft,quant}/LFM2.5-VL-3B-DSpark-<name>.gguf.
+environment: N_MAX (DSpark --spec-draft-n-max, default 8)
+Drafter files are looked up under $EDGESPECQ_HOME/models/{draft,quant}/LFM2.5-VL-3B-DSpark-<name>.gguf, and E9
+reduced-vocabulary drafters (V16k, ...) under models/e9/.
 """
-import argparse, json, os, re, subprocess, tempfile
+import argparse, json, os, re, subprocess
 
 HOME = os.path.expanduser(os.environ.get("EDGESPECQ_HOME", "~/edgespecq"))
 KEYS = ("draft_decode", "draft_sample", "draft_other", "verify", "inject", "tgt_sample", "other", "total")
@@ -17,22 +19,23 @@ KEYS = ("draft_decode", "draft_sample", "draft_other", "verify", "inject", "tgt_
 def drafter_path(name):
     if name == "F16":
         return f"{HOME}/models/draft/LFM2.5-VL-3B-DSpark-F16.gguf"
+    if name.startswith("V"):  # E9 reduced-vocabulary drafters (scripts/make_e9_drafters.sh)
+        return f"{HOME}/models/e9/LFM2.5-VL-3B-DSpark-Q8_0-{name}.gguf"
     return f"{HOME}/models/quant/LFM2.5-VL-3B-DSpark-{name}.gguf"
 
 
 def run(binary, target, drafter, prompt, n, extra):
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
-        f.write(f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n")
-        pfile = f.name
-    args = [binary, "-m", target, "-ngl", "99", "-fa", "on", "-c", "4096", "--temp", "0", "-n", str(n), "-f", pfile]
+    # -p, not -f: -f drops the trailing newline after "assistant"; --no-escape keeps backslashes in code prompts
+    text = f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+    args = [binary, "-m", target, "-ngl", "99", "-fa", "on", "-c", "4096", "--temp", "0", "-n", str(n),
+            "-p", text, "--no-escape"]
     if drafter == "none":
         args += ["--spec-type", "none"]
     else:
         args += ["-md", drafter_path(drafter), "-ngld", "99", "--spec-type", "draft-dspark",
-                 "--spec-draft-n-max", "8", "--spec-draft-n-min", "0"]
+                 "--spec-draft-n-max", os.environ.get("N_MAX", "8"), "--spec-draft-n-min", "0"]
     args += extra
     out = subprocess.run(args, capture_output=True, text=True).stderr + ""
-    os.unlink(pfile)
     m_r = re.search(r"E8 rounds=(\d+) draft_rounds=(\d+) tokens/round=([0-9.]+)", out)
     m_t = re.search(r"E8 per_round_ms (.*)", out)
     m_dec = re.search(r"decoded\s+(\d+) tokens in\s+([0-9.]+) seconds", out)

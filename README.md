@@ -23,6 +23,12 @@ Work in progress.
 | `quantization/inspect_gguf.py` | Tensor manifest of a GGUF (name, shape, dtype, bytes) grouped by DSpark component |
 | `scripts/quantize_draft.sh` | Quantize the F16 DSpark drafter to Q8_0 / Q4_K_M / Q4_0 / P3 mixed, with manifests and SHA256 |
 | `scripts/run_draft_precision.sh` | Fixed target, drafter-precision sweep: acceptance, mean accepted length, decode t/s |
+| `benchmark/build_probe_ja.py` | 10-prompt Japanese pilot probe (every 10th task of ELYZA-tasks-100) |
+| `analysis/e9_collect.py` | Per-round drafts and accepted counts from the timing build (`E9R` lines) |
+| `analysis/e9_corpus_freq.py`, `analysis/e9_selfgen.py` | Token frequencies of the LFM2.5 vocabulary: generic corpora, and the target's own answers to non-probe prompts |
+| `analysis/e9_simulate.py` | Acceptance of a reduced draft vocabulary, simulated from full-vocabulary rounds |
+| `quantization/make_reduced_vocab_drafter.py` | Lossless reduced-vocabulary DSpark drafter export (row slices + `d2t`), no retraining |
+| `scripts/make_e9_drafters.sh`, `scripts/run_e9_vocab.sh` | Build the 16k–48k drafters; end-to-end acceptance and t/s against the full-vocabulary drafter |
 
 ## Setup (WSL2 / Linux, CUDA)
 

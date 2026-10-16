@@ -36,7 +36,7 @@ index d8afd4095..70af9430c 100644
          for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
              if (i_block_beg[seq_id] < 0) {
 diff --git a/examples/speculative-simple/speculative-simple.cpp b/examples/speculative-simple/speculative-simple.cpp
-index e4a878b82..f9305b860 100644
+index e4a878b82..bbc715637 100644
 --- a/examples/speculative-simple/speculative-simple.cpp
 +++ b/examples/speculative-simple/speculative-simple.cpp
 @@ -14,6 +14,11 @@
@@ -62,7 +62,15 @@ index e4a878b82..f9305b860 100644
      while (true) {
          // generate or reuse draft tokens
          //
-@@ -193,7 +202,11 @@ int main(int argc, char ** argv) {
+@@ -167,6 +176,7 @@ int main(int argc, char ** argv) {
+         // offloaded to a remote device. it doesn't even have to be based on an LLM. instead, it can provide tokens
+         // from a cache or lookup tables.
+         //
++        const bool e9_fresh_draft = draft.empty();
+         if (draft.empty()) {
+             ckpt.update_pos(
+                     prompt_tgt.size(),
+@@ -193,7 +203,11 @@ int main(int argc, char ** argv) {
                  /* .prompt     = */ &prompt_tgt,
                  /* .result     = */ &draft, // output
              };
@@ -75,7 +83,7 @@ index e4a878b82..f9305b860 100644
  
              // save a checkpoint of the target context before evaluating the draft
              // this allows us to restore the state if partial draft acceptance occurs
-@@ -229,13 +242,25 @@ int main(int argc, char ** argv) {
+@@ -229,13 +243,25 @@ int main(int argc, char ** argv) {
              }
  
  
@@ -104,17 +112,26 @@ index e4a878b82..f9305b860 100644
          }
  
          // only save the sampler sampler state if we use checkpoints
-@@ -254,7 +279,9 @@ int main(int argc, char ** argv) {
+@@ -254,7 +280,18 @@ int main(int argc, char ** argv) {
          // available logits from the batch and sample the next token until we run out of logits or the sampler
          // disagrees with the draft
          //
 +        const int64_t t_ts0 = ggml_time_us();
          auto ids = common_sampler_sample_and_accept_n(smpl.get(), ctx_tgt, draft);
 +        e8_t_tsample_us += ggml_time_us() - t_ts0;
++
++        // E9: per freshly drafted round, the proposed draft and how many of its leading tokens the target accepted
++        if (e9_fresh_draft && !draft.empty()) {
++            std::string s = "E9R n_acc=" + std::to_string(ids.size() - 1) + " draft=";
++            for (size_t i = 0; i < draft.size(); ++i) {
++                s += (i ? "," : "") + std::to_string(draft[i]);
++            }
++            LOG_INF("%s\n", s.c_str());
++        }
  
          //LOG_DBG("ids: %s\n", string_from(ctx_tgt, ids).c_str());
  
-@@ -356,6 +383,18 @@ int main(int argc, char ** argv) {
+@@ -356,6 +393,18 @@ int main(int argc, char ** argv) {
      LOG_INF("n_accept  = %d\n", n_accept);
      LOG_INF("accept    = %.3f%%\n", 100.0f * n_accept / n_drafted);
  
