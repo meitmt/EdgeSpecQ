@@ -1,0 +1,135 @@
+diff --git a/common/speculative.cpp b/common/speculative.cpp
+index d8afd4095..70af9430c 100644
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -979,6 +979,11 @@ struct common_speculative_impl_draft_eagle3 : public common_speculative_impl {
+ };
+ 
+ // DFlash: block-diffusion drafting with a draft-side KV cache injection
++// E8 timing build only: accumulated draft-side time (us) and round count
++double  g_e8_t_draft_decode_us = 0.0;
++double  g_e8_t_draft_sample_us = 0.0;
++int64_t g_e8_n_draft_rounds    = 0;
++
+ struct common_speculative_impl_draft_dflash : public common_speculative_impl {
+     common_params_speculative_draft params;
+ 
+@@ -1313,11 +1318,20 @@ struct common_speculative_impl_draft_dflash : public common_speculative_impl {
+         }
+ 
+         // decode all sequence's noise block in a single batch
++        const int64_t t_e8_0 = ggml_time_us();
+         int ret = llama_process(ctx_dft, LLAMA_PROCESS_TYPE_DECODE, batch.get());
+         if (ret != 0) {
+             LOG_WRN("%s: llama_process returned %d\n", __func__, ret);
+             return;
+         }
++        llama_synchronize(ctx_dft);
++        const int64_t t_e8_1 = ggml_time_us();
++        g_e8_t_draft_decode_us += t_e8_1 - t_e8_0;
++        g_e8_n_draft_rounds++;
++        struct e8_sample_timer {
++            int64_t t0 = ggml_time_us();
++            ~e8_sample_timer() { g_e8_t_draft_sample_us += ggml_time_us() - t0; }
++        } e8_timer;
+ 
+         for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
+             if (i_block_beg[seq_id] < 0) {
+diff --git a/examples/speculative-simple/speculative-simple.cpp b/examples/speculative-simple/speculative-simple.cpp
+index e4a878b82..f9305b860 100644
+--- a/examples/speculative-simple/speculative-simple.cpp
++++ b/examples/speculative-simple/speculative-simple.cpp
+@@ -14,6 +14,11 @@
+ #include <vector>
+ #include <utility>
+ 
++// E8 timing build only (defined in common/speculative.cpp)
++extern double  g_e8_t_draft_decode_us;
++extern double  g_e8_t_draft_sample_us;
++extern int64_t g_e8_n_draft_rounds;
++
+ int main(int argc, char ** argv) {
+     std::setlocale(LC_NUMERIC, "C");
+ 
+@@ -159,6 +164,10 @@ int main(int argc, char ** argv) {
+ 
+     const auto t_dec_start = ggml_time_us();
+ 
++    double  e8_t_draft_us = 0, e8_t_verify_us = 0, e8_t_inject_us = 0, e8_t_tsample_us = 0;
++    int64_t e8_n_rounds   = 0;
++    g_e8_t_draft_decode_us = g_e8_t_draft_sample_us = 0; g_e8_n_draft_rounds = 0;
++
+     while (true) {
+         // generate or reuse draft tokens
+         //
+@@ -193,7 +202,11 @@ int main(int argc, char ** argv) {
+                 /* .prompt     = */ &prompt_tgt,
+                 /* .result     = */ &draft, // output
+             };
+-            common_speculative_draft(spec);
++            {
++                const int64_t t0 = ggml_time_us();
++                common_speculative_draft(spec);
++                e8_t_draft_us += ggml_time_us() - t0;
++            }
+ 
+             // save a checkpoint of the target context before evaluating the draft
+             // this allows us to restore the state if partial draft acceptance occurs
+@@ -229,13 +242,25 @@ int main(int argc, char ** argv) {
+             }
+ 
+ 
++            const int64_t t0 = ggml_time_us();
+             llama_process(ctx_tgt, LLAMA_PROCESS_TYPE_DECODE, batch_tgt.get());
++            llama_synchronize(ctx_tgt);
++            e8_t_verify_us += ggml_time_us() - t0;
++            e8_n_rounds++;
+         }
+ 
+         // feed the batch to the speculative implementation(s) - this drives the draft model, MTP, Eagle3, etc.
+-        if (!common_speculative_process(spec, batch_tgt)) {
+-            LOG_ERR("%s", "failed to process speculative batch\n");
+-            break;
++        {
++            const int64_t t0 = ggml_time_us();
++            const bool ok = common_speculative_process(spec, batch_tgt);
++            if (ctx_dft) {
++                llama_synchronize(ctx_dft);
++            }
++            e8_t_inject_us += ggml_time_us() - t0;
++            if (!ok) {
++                LOG_ERR("%s", "failed to process speculative batch\n");
++                break;
++            }
+         }
+ 
+         // only save the sampler sampler state if we use checkpoints
+@@ -254,7 +279,9 @@ int main(int argc, char ** argv) {
+         // available logits from the batch and sample the next token until we run out of logits or the sampler
+         // disagrees with the draft
+         //
++        const int64_t t_ts0 = ggml_time_us();
+         auto ids = common_sampler_sample_and_accept_n(smpl.get(), ctx_tgt, draft);
++        e8_t_tsample_us += ggml_time_us() - t_ts0;
+ 
+         //LOG_DBG("ids: %s\n", string_from(ctx_tgt, ids).c_str());
+ 
+@@ -356,6 +383,18 @@ int main(int argc, char ** argv) {
+     LOG_INF("n_accept  = %d\n", n_accept);
+     LOG_INF("accept    = %.3f%%\n", 100.0f * n_accept / n_drafted);
+ 
++    {
++        const double t_dec = (double) (t_dec_end - t_dec_start);
++        const double n_r = std::max<int64_t>(e8_n_rounds, 1);
++        const double other = t_dec - e8_t_draft_us - e8_t_verify_us - e8_t_inject_us - e8_t_tsample_us;
++        LOG_INF("\n");
++        LOG_INF("E8 rounds=%" PRId64 " draft_rounds=%" PRId64 " tokens/round=%.3f\n", e8_n_rounds, g_e8_n_draft_rounds, n_predict / n_r);
++        LOG_INF("E8 per_round_ms draft_decode=%.3f draft_sample=%.3f draft_other=%.3f verify=%.3f inject=%.3f tgt_sample=%.3f other=%.3f total=%.3f\n",
++                g_e8_t_draft_decode_us / n_r / 1e3, g_e8_t_draft_sample_us / n_r / 1e3,
++                (e8_t_draft_us - g_e8_t_draft_decode_us - g_e8_t_draft_sample_us) / n_r / 1e3,
++                e8_t_verify_us / n_r / 1e3, e8_t_inject_us / n_r / 1e3, e8_t_tsample_us / n_r / 1e3, other / n_r / 1e3, t_dec / n_r / 1e3);
++    }
++
+     LOG_INF("\n");
+     LOG_INF("draft:\n\n");
+     common_speculative_print_stats(spec);
