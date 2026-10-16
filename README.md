@@ -20,6 +20,9 @@ Work in progress.
 | `scripts/bench_tg.sh` | Median token-generation t/s of one build (llama-bench, target only) |
 | `scripts/bisect_perf.sh` | `git bisect run` for tg regressions, judged by ratio to an interleaved reference build |
 | `analysis/nsys_decode_overhead.sh` | Nsight Systems comparison of builds: kernels, CUDA API calls, H2D copy sizes |
+| `quantization/inspect_gguf.py` | Tensor manifest of a GGUF (name, shape, dtype, bytes) grouped by DSpark component |
+| `scripts/quantize_draft.sh` | Quantize the F16 DSpark drafter to Q8_0 / Q4_K_M / Q4_0 / P3 mixed, with manifests and SHA256 |
+| `scripts/run_draft_precision.sh` | Fixed target, drafter-precision sweep: acceptance, mean accepted length, decode t/s |
 
 ## Setup (WSL2 / Linux, CUDA)
 
