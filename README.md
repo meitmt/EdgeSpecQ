@@ -17,6 +17,9 @@ Work in progress.
 | `analysis/batch_invariance.py` | Next-token logprobs vs physical batch size (`-ub`), no speculation |
 | `scripts/run_r1.sh` | Old commit vs master acceptance comparison |
 | `scripts/run_greedy_matrix.sh` | Greedy-equivalence matrix: precision x `n_max`, CPU control, batch invariance |
+| `scripts/bench_tg.sh` | Median token-generation t/s of one build (llama-bench, target only) |
+| `scripts/bisect_perf.sh` | `git bisect run` for tg regressions, judged by ratio to an interleaved reference build |
+| `analysis/nsys_decode_overhead.sh` | Nsight Systems comparison of builds: kernels, CUDA API calls, H2D copy sizes |
 
 ## Setup (WSL2 / Linux, CUDA)
 
