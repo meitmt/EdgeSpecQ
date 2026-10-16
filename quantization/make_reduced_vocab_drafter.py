@@ -5,7 +5,8 @@ The draft vocabulary is the N most frequent target tokens on a reference corpus 
 analysis/e9_corpus_freq.py), always including control and user-defined tokens (never the [PAD] fillers). The new GGUF
   - slices markov_w2 to the N kept rows,
   - adds its own `output` = the N kept rows of the target's (tied) token_embd,
-  - adds `d2t` (I64, draft row -> target token id), which llama.cpp's dflash loader already understands.
+  - adds `d2t` (draft row -> target token id), which llama.cpp's dflash loader already understands (I64; I32 with
+    --d2t-type i32, for the draft-space Markov chain of e9-c4-draft-space.patch).
 Both weights are quantized along the hidden dimension only, so row slicing is lossless: for every kept token the
 drafter's logits are bit-identical to the full-vocab drafter.
 
@@ -43,6 +44,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("drafter"); ap.add_argument("target"); ap.add_argument("n", type=int); ap.add_argument("out")
     ap.add_argument("--mix", default="en_chat=1,en_wiki=1,code=1,math=1,ja_wiki=1,ja_chat=1")
+    # i32 lets runtime/llama_cpp_patches/e9-c4-draft-space.patch keep the Markov chain in draft space; stock
+    # llama.cpp only accepts i64
+    ap.add_argument("--d2t-type", choices=("i64", "i32"), default="i64")
     a = ap.parse_args()
     mix = {k: float(v) for k, v in (kv.split("=") for kv in a.mix.split(","))}
 
@@ -54,7 +58,7 @@ def main():
     w2 = tensor(dr, "markov_w2.weight")
     new = {"markov_w2.weight": (w2.data[ids], w2.tensor_type),
            "output.weight":    (emb.data[ids], emb.tensor_type),
-           "d2t":              (ids, None)}
+           "d2t":              (ids.astype(np.int32 if a.d2t_type == "i32" else np.int64), None)}
     assert not any(t.name in ("output.weight", "d2t") for t in dr.tensors), "drafter already has its own output/d2t"
 
     arch = dr.get_field(gguf.Keys.General.ARCHITECTURE).contents()

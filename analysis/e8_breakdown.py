@@ -8,7 +8,7 @@ draft_decode / draft_sample / draft_other / verify / inject / tgt_sample / other
 usage: e8_breakdown.py <llama_dir> <target.gguf> [--drafters none,F16,Q8_0,...] [--n 256] [--prompts 5] [--extra "..."]
 environment: N_MAX (DSpark --spec-draft-n-max, default 8)
 Drafter files are looked up under $EDGESPECQ_HOME/models/{draft,quant}/LFM2.5-VL-3B-DSpark-<name>.gguf, and E9
-reduced-vocabulary drafters (V16k, ...) under models/e9/.
+reduced-vocabulary drafters (Q4_K_M-V32k, ...; a bare V32k means Q8_0-V32k) under models/e9/.
 """
 import argparse, json, os, re, subprocess
 
@@ -19,8 +19,11 @@ KEYS = ("draft_decode", "draft_sample", "draft_other", "verify", "inject", "tgt_
 def drafter_path(name):
     if name == "F16":
         return f"{HOME}/models/draft/LFM2.5-VL-3B-DSpark-F16.gguf"
-    if name.startswith("V"):  # E9 reduced-vocabulary drafters (scripts/make_e9_drafters.sh)
+    # E9 reduced-vocabulary drafters (scripts/make_e9_drafters.sh): <base>-V<size>k, bare V<size>k = Q8_0 base
+    if name.startswith("V"):
         return f"{HOME}/models/e9/LFM2.5-VL-3B-DSpark-Q8_0-{name}.gguf"
+    if "-V" in name:
+        return f"{HOME}/models/e9/LFM2.5-VL-3B-DSpark-{name}.gguf"
     return f"{HOME}/models/quant/LFM2.5-VL-3B-DSpark-{name}.gguf"
 
 

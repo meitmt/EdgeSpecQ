@@ -1,0 +1,132 @@
+diff --git a/src/models/dflash.cpp b/src/models/dflash.cpp
+index 6f28d2f1d..47e7efa87 100644
+--- a/src/models/dflash.cpp
++++ b/src/models/dflash.cpp
+@@ -367,7 +367,26 @@ llama_model_dflash::graph<true>::graph(const llama_model & model, const llm_grap
+ }
+ 
+ // DSpark (DFlash + Markov & Confidence head): Markov bias on the draft logits, chained per block position
+-static void build_dspark_markov_head(llm_graph_context & g, const llama_model & model, ggml_tensor * tokens) {
++// reduced-draft-vocab exports: scatter [n_draft_vocab, n_outputs] logits to the target vocabulary via d2t
++static ggml_tensor * build_d2t_scatter(ggml_context * ctx0, const llama_model & model, ggml_tensor * cur) {
++    const int64_t n_draft_vocab = cur->ne[0];
++    const int64_t n_outputs     = cur->ne[1];
++    const int64_t n_vocab       = (int64_t) model.vocab.n_tokens();
++
++    GGML_ASSERT(model.d2t->type == GGML_TYPE_I64 || model.d2t->type == GGML_TYPE_I32);
++    GGML_ASSERT(model.d2t->ne[0] == n_draft_vocab);
++
++    ggml_tensor * logits = ggml_fill(ctx0, ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 1, n_vocab, n_outputs), -INFINITY);
++    cur = ggml_set_rows(ctx0, logits,
++            ggml_reshape_3d(ctx0, cur,       1,             n_draft_vocab, n_outputs),
++            ggml_reshape_3d(ctx0, model.d2t, n_draft_vocab, 1,             1));
++    return ggml_reshape_2d(ctx0, cur, n_vocab, n_outputs);
++}
++
++// logits_d: draft-vocabulary logits [n_draft_vocab, n_tokens] when the chain runs in draft space (I32 d2t), else
++// nullptr and the chain works on the target-vocabulary res->t_logits
++static void build_dspark_markov_head(llm_graph_context & g, const llama_model & model, ggml_tensor * tokens,
++                                     ggml_tensor * logits_d) {
+     ggml_context * ctx0 = g.ctx0;
+     auto         & res  = g.res;
+ 
+@@ -378,7 +397,11 @@ static void build_dspark_markov_head(llm_graph_context & g, const llama_model &
+     // confidence head is optional
+     const bool has_conf = model.dspark_conf_proj != nullptr;
+ 
+-    ggml_tensor * base = res->t_logits; // [n_vocab, n_tokens]
++    // draft space: biases are added and argmax'ed over the draft rows only; argmax indices are mapped to target
++    // token ids through d2t to index markov_w1, and the result is scattered to the target vocabulary once at the end
++    const bool draft_space = logits_d != nullptr;
++
++    ggml_tensor * base = draft_space ? logits_d : res->t_logits; // [n_vocab (draft or target), n_tokens]
+     const int64_t n_vocab = base->ne[0];
+     const int64_t n_tok   = base->ne[1];
+ 
+@@ -397,6 +420,9 @@ static void build_dspark_markov_head(llm_graph_context & g, const llama_model &
+     // runtime tokens per block in this ubatch (anchor + drafted positions), bounded by training block_size
+     const int64_t block_drafts = n_tok / n_blocks;
+     if (block_drafts > block_size) {
++        if (draft_space) {
++            res->t_logits = build_d2t_scatter(ctx0, model, base);
++        }
+         return;
+     }
+ 
+@@ -423,7 +449,7 @@ static void build_dspark_markov_head(llm_graph_context & g, const llama_model &
+     for (int64_t i = i_draft_beg; i < block_drafts; ++i) {
+         ggml_tensor * w1_prev = ggml_get_rows(ctx0, w1, prev);                          // [R, n_blocks]
+         ggml_tensor * bias    = g.build_lora_mm(w2, w1_prev, model.dspark_markov_w2_s); // [n_vocab_draft, n_blocks]
+-        if (model.d2t) {
++        if (model.d2t && !draft_space) {
+             // reduced draft vocab: scatter the bias to the target rows (base is -inf on the others)
+             const int64_t n_draft_vocab = bias->ne[0];
+             ggml_tensor * full = ggml_fill(ctx0, ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 1, n_vocab, n_blocks), 0.0f);
+@@ -457,6 +483,11 @@ static void build_dspark_markov_head(llm_graph_context & g, const llama_model &
+ 
+         if (i + 1 < block_drafts) {
+             prev = ggml_argmax(ctx0, col);
++            if (draft_space) {
++                // draft row -> target token id: d2t viewed as n_draft_vocab rows of one I32
++                prev = ggml_get_rows(ctx0, ggml_reshape_2d(ctx0, model.d2t, 1, n_vocab), prev); // [1, n_blocks]
++                prev = ggml_reshape_1d(ctx0, prev, n_blocks);
++            }
+         }
+     }
+ 
+@@ -464,6 +495,9 @@ static void build_dspark_markov_head(llm_graph_context & g, const llama_model &
+     ggml_tensor * out = ggml_reshape_3d(ctx0, cat, n_vocab, n_blocks, block_drafts);
+     out = ggml_cont(ctx0, ggml_permute(ctx0, out, 0, 2, 1, 3)); // [n_vocab, block_drafts, n_blocks]
+     out = ggml_reshape_2d(ctx0, out, n_vocab, n_tok);
++    if (draft_space) {
++        out = build_d2t_scatter(ctx0, model, out);
++    }
+ 
+     if (has_conf) {
+         ggml_tensor * conf = ggml_reshape_3d(ctx0, cat_conf, 1, n_blocks, block_drafts);
+@@ -1075,27 +1109,22 @@ llama_model_dflash::graph<false>::graph(const llama_model & model, const llm_gra
+         }
+     }
+ 
+-    // reduced-draft-vocab exports: scatter the draft logits to the target vocabulary via d2t
++    // reduced-draft-vocab exports: scatter the draft logits to the target vocabulary via d2t. With an I32 d2t the
++    // DSpark Markov chain runs in draft space and scatters once at its end instead.
++    ggml_tensor * logits_d = nullptr;
+     if (model.d2t) {
+-        const int64_t n_draft_vocab = cur->ne[0];
+-        const int64_t n_outputs     = cur->ne[1];
+-        const int64_t n_vocab       = (int64_t) model.vocab.n_tokens();
+-
+-        GGML_ASSERT(model.d2t->type == GGML_TYPE_I64);
+-        GGML_ASSERT(model.d2t->ne[0] == n_draft_vocab);
+-
+-        ggml_tensor * logits = ggml_fill(ctx0, ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 1, n_vocab, n_outputs), -INFINITY);
+-        cur = ggml_set_rows(ctx0, logits,
+-                ggml_reshape_3d(ctx0, cur,       1,             n_draft_vocab, n_outputs),
+-                ggml_reshape_3d(ctx0, model.d2t, n_draft_vocab, 1,             1));
+-        cur = ggml_reshape_2d(ctx0, cur, n_vocab, n_outputs);
++        if (model.dspark_markov_w1 && model.d2t->type == GGML_TYPE_I32) {
++            logits_d = cur;
++        } else {
++            cur = build_d2t_scatter(ctx0, model, cur);
++        }
+     }
+     cb(cur, "result_output", -1);
+     res->t_logits = cur;
+ 
+     // DSpark: bias the draft logits with the Markov head
+     if (model.dspark_markov_w1) {
+-        build_dspark_markov_head(*this, model, inp_tokens);
++        build_dspark_markov_head(*this, model, inp_tokens, logits_d);
+     }
+ 
+     if (model.dflash_selector_hidden) {
+@@ -1275,7 +1304,7 @@ llama_model_dflash::graph_dsv4::graph_dsv4(const llama_model & model, const llm_
+     res->t_logits = cur;
+ 
+     if (model.dspark_markov_w1) {
+-        build_dspark_markov_head(*this, model, inp_tokens);
++        build_dspark_markov_head(*this, model, inp_tokens, nullptr);
+     }
+ }
+ 
