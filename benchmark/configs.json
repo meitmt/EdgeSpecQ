@@ -1,0 +1,59 @@
+{
+  "_doc": "Evaluation configurations (proj §5.3 B0-B12, E10 A0-A7). target/draft are file tags: targets under models/target/LFM2.5-VL-3B-<target>.gguf; drafters F16 -> models/draft, <base> -> models/quant, <base>-V<size>k[-i32] -> models/e9. runtime names a set of shared libraries per platform (see runtimes). n_max null = platform default.",
+
+  "platforms": {
+    "jetson": {
+      "home": "~/mt_test/liquid_ai",
+      "llama_dir": "~/mt_test/liquid_ai/llama.cpp",
+      "n_max": 6,
+      "runtimes": {
+        "master": ["libs/cuda_master", "libs/master", "libs/llama_base"],
+        "fixed":  ["libs/cuda_fix", "libs/fix", "libs/llama_base"],
+        "edge":   ["libs/cuda_fix", "libs/fix", "libs/llama_c4"]
+      }
+    },
+    "rtx5070": {
+      "home": "~/edgespecq",
+      "llama_dir": "~/edgespecq/llama-edge",
+      "n_max": 7,
+      "runtimes": {
+        "master": ["libs/5070/master"],
+        "fixed":  ["libs/5070/fixed"],
+        "edge":   ["libs/5070/edge"]
+      }
+    }
+  },
+
+  "sampling": {
+    "greedy": {"temperature": 0},
+    "t07":    {"temperature": 0.7, "top_p": 0.95}
+  },
+
+  "configs": {
+    "B0":  {"target": "Q4_K_M", "draft": null,          "runtime": "edge"},
+    "B1":  {"target": "Q4_K_M", "draft": "F16",         "runtime": "edge"},
+    "B1m": {"target": "Q4_K_M", "draft": "F16",         "runtime": "master", "n_max": 8, "_doc": "official drafter as shipped"},
+    "B2":  {"target": "Q4_K_M", "draft": "Q8_0",        "runtime": "edge"},
+    "B3":  {"target": "Q4_K_M", "draft": "Q4_K_M",      "runtime": "edge"},
+    "B4":  {"target": "Q8_0",   "draft": null,          "runtime": "edge"},
+    "B5":  {"target": "Q8_0",   "draft": "F16",         "runtime": "edge"},
+    "B6":  {"target": "Q8_0",   "draft": "Q8_0",        "runtime": "edge"},
+    "B7":  {"target": "Q8_0",   "draft": "Q4_K_M",      "runtime": "edge"},
+    "B8":  {"target": "Q4_0",   "draft": null,          "runtime": "edge"},
+    "B9":  {"target": "Q4_0",   "draft": "F16",         "runtime": "edge"},
+    "B10": {"target": "Q4_0",   "draft": "Q4_0",        "runtime": "edge"},
+    "B11": {"target": "Q4_K_M", "draft": "P3-V32k-i32",     "runtime": "edge"},
+    "B12": {"target": "Q4_K_M", "draft": "Q4_K_M-V16k-i32", "runtime": "edge"},
+    "R0":  {"target": "F16",    "draft": null,          "runtime": "edge"},
+    "R1":  {"target": "F16",    "draft": "F16",         "runtime": "edge"},
+
+    "A0":  {"target": "Q4_K_M", "draft": null,          "runtime": "master"},
+    "A1":  {"target": "Q4_K_M", "draft": "F16",         "runtime": "master", "n_max": 8},
+    "A2":  {"target": "Q4_K_M", "draft": "F16",         "runtime": "fixed",  "n_max": 8},
+    "A3":  {"target": "Q4_K_M", "draft": "Q8_0",        "runtime": "fixed",  "n_max": 8},
+    "A4":  {"target": "Q4_K_M", "draft": "P3",          "runtime": "fixed",  "n_max": 8},
+    "A5":  {"target": "Q4_K_M", "draft": "P3",          "runtime": "fixed"},
+    "A6":  {"target": "Q4_K_M", "draft": "P3-V32k",     "runtime": "fixed"},
+    "A7":  {"target": "Q4_K_M", "draft": "P3-V32k-i32", "runtime": "edge"}
+  }
+}
