@@ -12,6 +12,17 @@
         "edge":   ["libs/cuda_fix", "libs/fix", "libs/llama_c4"]
       }
     },
+    "jetson_25w": {
+      "_doc": "same as jetson, measured in the factory-default 25W mode without jetson_clocks (E10); own result dir",
+      "home": "~/mt_test/liquid_ai",
+      "llama_dir": "~/mt_test/liquid_ai/llama.cpp",
+      "n_max": 6,
+      "runtimes": {
+        "master": ["libs/cuda_master", "libs/master", "libs/llama_base"],
+        "fixed":  ["libs/cuda_fix", "libs/fix", "libs/llama_base"],
+        "edge":   ["libs/cuda_fix", "libs/fix", "libs/llama_c4"]
+      }
+    },
     "rtx5070": {
       "home": "~/edgespecq",
       "llama_dir": "~/edgespecq/llama-edge",
