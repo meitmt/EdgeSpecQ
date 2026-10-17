@@ -5,13 +5,14 @@ For every (config, repetition) one llama-server is started with that config's ta
 (LD_LIBRARY_PATH) and n_max; every sample is sent turn by turn (multi-turn samples get the model's own previous
 answers as history; images go with the first user turn). Each finished sample is appended immediately to
   $HOME/logs/eval/<platform>/<set>/<config>[_<sampling>]/r<rep>.jsonl
-and samples already there are skipped, so an interrupted run resumes where it stopped. Repetitions rotate the
-config order so slow drift does not favour one config.
+and samples already there are skipped, so an interrupted run resumes where it stopped. If the server dies during a
+request, the crash is logged to crashes_r<rep>.jsonl, the server is restarted and the sample retried once.
+Repetitions rotate the config order so slow drift does not favour one config.
 
 usage: run_eval.py <platform> <set.jsonl> <config,config,...> [--reps 1] [--sampling greedy] [--seed 0]
                    [--max-tokens 512] [--n N]   (N: evenly subsample the set, for smoke runs)
 """
-import argparse, base64, hashlib, json, os, re, subprocess, time, urllib.request
+import argparse, base64, hashlib, http.client, json, os, re, subprocess, time, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORT = int(os.environ.get("PORT", 8095))
@@ -149,15 +150,35 @@ def main():
             json.dump({"config": cfg, "sampling": sampling, "seed": a.seed, "max_tokens": a.max_tokens},
                       open(f"{outdir}/config.json", "w"), indent=1)
             t0 = time.time()
-            with Server(plat, cfg, f"{outdir}/server_r{rep}.log") as srv:
-                json.dump({"argv": srv.args, "LD_LIBRARY_PATH": srv.env["LD_LIBRARY_PATH"]},
-                          open(f"{outdir}/server_r{rep}.json", "w"), indent=1)
-                for s in todo:
-                    turns, texts = run_sample(srv, s, sampling, a.seed, a.max_tokens)
-                    with open(out, "a") as f:
-                        f.write(json.dumps({"id": s["id"], "src": s["src"], "turns": turns}) + "\n")
-                    with open(f"{outdir}/outputs_r{rep}.jsonl", "a") as f:
-                        f.write(json.dumps({"id": s["id"], "texts": texts}, ensure_ascii=False) + "\n")
+            # a server crash is recorded (crashes_r<rep>.jsonl, with the log of that server kept), the server is
+            # restarted and the sample retried once; a sample that crashes twice is skipped
+            attempts, starts = {}, 0
+            queue = list(todo)
+            while queue:
+                log = f"{outdir}/server_r{rep}.log" if starts == 0 else f"{outdir}/server_r{rep}_restart{starts}.log"
+                starts += 1
+                with Server(plat, cfg, log) as srv:
+                    json.dump({"argv": srv.args, "LD_LIBRARY_PATH": srv.env["LD_LIBRARY_PATH"]},
+                              open(f"{outdir}/server_r{rep}.json", "w"), indent=1)
+                    while queue:
+                        s = queue[0]
+                        try:
+                            turns, texts = run_sample(srv, s, sampling, a.seed, a.max_tokens)
+                        except (OSError, http.client.HTTPException) as e:  # server died mid-request
+                            attempts[s["id"]] = attempts.get(s["id"], 0) + 1
+                            with open(f"{outdir}/crashes_r{rep}.jsonl", "a") as f:
+                                f.write(json.dumps({"id": s["id"], "attempt": attempts[s["id"]], "error": repr(e),
+                                                    "server_log": log, "time": time.time()}) + "\n")
+                            print(f"{name}{suffix} r{rep}: server crashed on {s['id']} ({e!r}), restarting",
+                                  flush=True)
+                            if attempts[s["id"]] >= 2:
+                                queue.pop(0)
+                            break
+                        queue.pop(0)
+                        with open(out, "a") as f:
+                            f.write(json.dumps({"id": s["id"], "src": s["src"], "turns": turns}) + "\n")
+                        with open(f"{outdir}/outputs_r{rep}.jsonl", "a") as f:
+                            f.write(json.dumps({"id": s["id"], "texts": texts}, ensure_ascii=False) + "\n")
             n_pred = 0; pred_ms = 0
             for l in open(out):
                 for t in json.loads(l)["turns"]:
