@@ -15,7 +15,7 @@
     "rtx5070": {
       "home": "~/edgespecq",
       "llama_dir": "~/edgespecq/llama-edge",
-      "n_max": 7,
+      "n_max": 8,
       "runtimes": {
         "master": ["libs/5070/master"],
         "fixed":  ["libs/5070/fixed"],

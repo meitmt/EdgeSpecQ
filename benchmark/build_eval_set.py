@@ -7,7 +7,7 @@ the same source datasets with a fixed seed:
   text_vqa       TextVQA validation (lmms-lab/textvqa)            question as is
   captioning     COCO 2017 val (lmms-lab/COCO-Caption2017)       "Describe this image in detail."
   chart_vqa      CharXiv validation (princeton-nlp/CharXiv)       reasoning question
-  reasoning      MMMU-Pro standard, 10 options (MMMU/MMMU_Pro)    official CoT prompt; at most 2 images
+  reasoning      MMMU-Pro standard, 10 options (MMMU/MMMU_Pro)    step-by-step suffix (see MMMU_COT); <= 2 images
   multi_turn     MM-MT-Bench (mistralai/MM-MT-Bench)              conversations with >= 2 user turns; the model
                                                                   answers every turn itself (reference answers unused)
 
@@ -25,9 +25,11 @@ HOME = os.path.expanduser(os.environ.get("EDGESPECQ_HOME", "~/edgespecq"))
 OUT = f"{HOME}/eval"
 SEED = 2026
 N_DEV, N_FINAL, N_SMOKE = 20, 100, 4
-MMMU_COT = ("Answer the following multiple choice question. The last line of your response should be of the following "
-            "format: 'Answer: $LETTER' (without quotes) where LETTER is one of the options. Think step by step before "
-            "answering.\n\n")
+# Placed after the options: with MMMU-Pro's own CoT prefix in front of the question, LFM2.5-VL replies with just
+# "Answer: X" (4 tokens), which makes the category useless for decode speed; this suffix gives a median of ~100
+# tokens with the answer line kept on 20/20 dev samples.
+MMMU_COT = ("\n\nThink step by step: first explain your reasoning in detail, then on the last line write "
+            "'Answer: $LETTER'.")
 
 
 def save(img, name):
@@ -91,7 +93,7 @@ def mmmu_pro():
     def row(i):
         r = ds[i]
         opts = eval(r["options"]) if isinstance(r["options"], str) else r["options"]  # stored as a Python list literal
-        text = MMMU_COT + r["question"] + "\n" + "\n".join(f"{chr(65 + k)}. {o}" for k, o in enumerate(opts))
+        text = r["question"] + "\n" + "\n".join(f"{chr(65 + k)}. {o}" for k, o in enumerate(opts)) + MMMU_COT
         images = [save(r[f"image_{k}"], f"mmmupro_{r['id']}_{k}") for k in range(1, 8) if r[f"image_{k}"] is not None]
         return {"id": f"mmmupro_{r['id']}", "turns": [text], "images": images}
     return len(ds), row, [i for i, n in enumerate(n_img) if n == 0 or n > 2]
