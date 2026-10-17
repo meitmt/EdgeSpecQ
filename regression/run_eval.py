@@ -54,6 +54,7 @@ class Server:
         if cfg.get("draft"):
             self.args += ["-md", model_path(home, cfg["draft"], "draft"), "-ngld", "99",
                           "--spec-type", "draft-dspark", "--spec-draft-n-max", str(n_max), "--spec-draft-n-min", "0"]
+        self.args += plat.get("server_args", [])
         libs = ":".join(f"{home}/{d}" for d in plat["runtimes"][cfg["runtime"]])
         self.env = {**os.environ, "LD_LIBRARY_PATH": libs + ":" + os.environ.get("LD_LIBRARY_PATH", "")}
         self.logpath = logpath
@@ -89,6 +90,18 @@ class Server:
         self.proc.terminate()
         self.proc.wait()
         self.log.close()
+
+
+def mem_state():
+    """MemAvailable / swap in use (MiB) and the cumulative swap-in/out page counters, recorded after every sample so
+    that samples measured under memory pressure can be flagged (a counter increase between rows = swapping)."""
+    try:
+        m = {l.split(":")[0]: int(l.split()[1]) for l in open("/proc/meminfo")}
+        v = {l.split()[0]: int(l.split()[1]) for l in open("/proc/vmstat")}
+        return {"mem_avail_mb": m["MemAvailable"] // 1024, "swap_mb": (m["SwapTotal"] - m["SwapFree"]) // 1024,
+                "pswpin": v["pswpin"], "pswpout": v["pswpout"]}
+    except (OSError, KeyError, ValueError, IndexError):
+        return {}
 
 
 def run_sample(srv, s, sampling, seed, max_tokens):
@@ -176,7 +189,7 @@ def main():
                             break
                         queue.pop(0)
                         with open(out, "a") as f:
-                            f.write(json.dumps({"id": s["id"], "src": s["src"], "turns": turns}) + "\n")
+                            f.write(json.dumps({"id": s["id"], "src": s["src"], "turns": turns, **mem_state()}) + "\n")
                         with open(f"{outdir}/outputs_r{rep}.jsonl", "a") as f:
                             f.write(json.dumps({"id": s["id"], "texts": texts}, ensure_ascii=False) + "\n")
             n_pred = 0; pred_ms = 0

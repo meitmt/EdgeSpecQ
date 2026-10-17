@@ -6,6 +6,8 @@
       "home": "~/mt_test/liquid_ai",
       "llama_dir": "~/mt_test/liquid_ai/llama.cpp",
       "n_max": 6,
+      "_server_args": "--cache-ram 0: llama-server's host prompt cache defaults to 8 GiB and fills the 8 GB board within one config (swap, OOM kills; 10-17)",
+      "server_args": ["--cache-ram", "0"],
       "runtimes": {
         "master": ["libs/cuda_master", "libs/master", "libs/llama_base"],
         "fixed":  ["libs/cuda_fix", "libs/fix", "libs/llama_base"],
@@ -17,6 +19,7 @@
       "home": "~/mt_test/liquid_ai",
       "llama_dir": "~/mt_test/liquid_ai/llama.cpp",
       "n_max": 6,
+      "server_args": ["--cache-ram", "0"],
       "runtimes": {
         "master": ["libs/cuda_master", "libs/master", "libs/llama_base"],
         "fixed":  ["libs/cuda_fix", "libs/fix", "libs/llama_base"],
