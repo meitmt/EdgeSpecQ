@@ -6,13 +6,17 @@ from the text probe (LFM2 chat format) and aggregates the "E8 per_round_ms" line
 draft_decode / draft_sample / draft_other / verify / inject / tgt_sample / other.
 
 usage: e8_breakdown.py <llama_dir> <target.gguf> [--drafters none,F16,Q8_0,...] [--n 256] [--prompts 5] [--extra "..."]
-environment: N_MAX (DSpark --spec-draft-n-max, default 8)
+environment: N_MAX (DSpark --spec-draft-n-max, default 8); PROBE (host path of the prompt set); for Android
+             ADB, SERIAL, REMOTE_ENV, BIN and a device EDGESPECQ_HOME (see below)
 Drafter files are looked up under $EDGESPECQ_HOME/models/{draft,quant}/LFM2.5-VL-3B-DSpark-<name>.gguf, and E9
 reduced-vocabulary drafters (Q4_K_M-V32k, ...; a bare V32k means Q8_0-V32k) under models/e9/.
 """
-import argparse, json, os, re, subprocess
+import argparse, json, os, re, shlex, subprocess
 
 HOME = os.path.expanduser(os.environ.get("EDGESPECQ_HOME", "~/edgespecq"))
+# Android: ADB (adb executable), SERIAL, REMOTE_ENV (e.g. "LD_LIBRARY_PATH=.. ADSP_LIBRARY_PATH=.."), BIN (device
+# path of llama-speculative-simple); EDGESPECQ_HOME is then the device directory holding models/
+ADB, SERIAL, REMOTE_ENV = os.environ.get("ADB"), os.environ.get("SERIAL", ""), os.environ.get("REMOTE_ENV", "")
 KEYS = ("draft_decode", "draft_sample", "draft_other", "verify", "inject", "tgt_sample", "other", "total")
 
 
@@ -38,7 +42,12 @@ def run(binary, target, drafter, prompt, n, extra):
         args += ["-md", drafter_path(drafter), "-ngld", "99", "--spec-type", "draft-dspark",
                  "--spec-draft-n-max", os.environ.get("N_MAX", "8"), "--spec-draft-n-min", "0"]
     args += extra
-    out = subprocess.run(args, capture_output=True, text=True).stderr + ""
+    if ADB:  # run on an Android device; paths (binary, models) are device paths
+        cmd = f"cd {HOME} && {REMOTE_ENV} " + " ".join(shlex.quote(a) for a in args) + " 2>&1"
+        r = subprocess.run([ADB, "-s", SERIAL, "shell", cmd], capture_output=True, text=True, errors="replace")
+        out = r.stdout + r.stderr
+    else:
+        out = subprocess.run(args, capture_output=True, text=True).stderr + ""
     m_r = re.search(r"E8 rounds=(\d+) draft_rounds=(\d+) tokens/round=([0-9.]+)", out)
     m_t = re.search(r"E8 per_round_ms (.*)", out)
     m_dec = re.search(r"decoded\s+(\d+) tokens in\s+([0-9.]+) seconds", out)
@@ -58,8 +67,9 @@ def main():
     ap.add_argument("--extra", default="")
     ap.add_argument("--json")
     a = ap.parse_args()
-    binary = f"{a.llama_dir}/build/bin/llama-speculative-simple"
-    prompts = [json.loads(l)["prompt"] for l in open(f"{HOME}/probe/track_t_probe20.jsonl")]
+    binary = os.environ.get("BIN") or f"{a.llama_dir}/build/bin/llama-speculative-simple"
+    probe = os.path.expanduser(os.environ.get("PROBE", f"{HOME}/probe/track_t_probe20.jsonl"))  # host path
+    prompts = [json.loads(l)["prompt"] for l in open(probe)]
     prompts = prompts[::max(1, len(prompts) // a.prompts)][:a.prompts]
     results = {}
     print(f"target={os.path.basename(a.target)}  prompts={len(prompts)}  n={a.n}  (ms per round, round-weighted)")

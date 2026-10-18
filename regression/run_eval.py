@@ -72,7 +72,16 @@ class Server:
         if cfg.get("draft"):
             self.args += ["-md", model_path(home, cfg["draft"], "draft"), "-ngld", ngl,
                           "--spec-type", "draft-dspark", "--spec-draft-n-max", str(n_max), "--spec-draft-n-min", "0"]
-        self.args += plat.get("server_args", [])
+        sargs = list(plat.get("server_args", []))
+        if cfg.get("device_draft"):  # per-config drafter device, e.g. target on HTP0 and drafter on GPUOpenCL / CPU
+            if "--device-draft" in sargs:
+                i = sargs.index("--device-draft"); del sargs[i:i + 2]
+            if cfg["device_draft"] == "CPU":  # no offload for the drafter
+                sargs += ["--device-draft", "none"]
+                self.args[self.args.index("-ngld") + 1] = "0"
+            else:
+                sargs += ["--device-draft", cfg["device_draft"]]
+        self.args += sargs
         libs = ":".join(f"{home}/{d}" for d in plat["runtimes"][cfg["runtime"]])
         # extra environment, e.g. ADSP_LIBRARY_PATH for the Hexagon NPU ("{libs}" = the runtime's library dirs)
         extra = {k: v.replace("{libs}", libs) for k, v in plat.get("env", {}).items()}
@@ -251,6 +260,16 @@ def main():
                 continue
             json.dump({"config": cfg, "sampling": sampling, "seed": a.seed, "max_tokens": a.max_tokens},
                       open(f"{outdir}/config.json", "w"), indent=1)
+            cool = plat.get("cooldown")  # phones: start every config from the same thermal state
+            if cool:
+                t_c = time.time()
+                while time.time() - t_c < cool.get("timeout_s", 900):
+                    temp = mem_state(plat).get("battery_temp_c")
+                    if temp is None or temp <= cool["max_battery_temp_c"]:
+                        break
+                    time.sleep(15)
+                print(f"{name}{suffix} r{rep}: start at battery {temp} C after {time.time() - t_c:.0f}s cooldown",
+                      flush=True)
             t0 = time.time()
             # a server crash is recorded (crashes_r<rep>.jsonl, with the log of that server kept), the server is
             # restarted and the sample retried once; a sample that crashes twice is skipped
