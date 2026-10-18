@@ -1,0 +1,6 @@
+platform,set,config,reps,n,tps,speedup,ci_lo,ci_hi,mean_len,accept,speedup_captioning,speedup_chart_vqa,speedup_general_vqa,speedup_multi_turn,speedup_reasoning,speedup_text_vqa
+phone_htp,smoke24,B0,1,24,25.01,1.0,1.0,1.0,nan,,1.0,1.0,1.0,1.0,1.0,1.0
+phone_htp,smoke24,B1,1,24,29.07,1.1623,1.0365,1.3072,4.067,0.3526,1.1865,1.5164,0.9573,1.2488,0.8629,0.8804
+phone_htp,smoke24,B11,1,24,31.55,1.2619,1.0994,1.4425,3.961,0.3271,1.3361,1.6754,1.067,1.3528,0.9856,0.8737
+phone_htp,smoke24,B11g,1,24,28.48,1.1387,0.9798,1.317,4.009,0.3295,1.3293,1.5193,1.0425,1.1533,0.8904,0.7719
+phone_htp,smoke24,B11c,1,24,6.81,0.2722,0.2257,0.3591,3.919,0.3279,0.2754,0.2781,0.8215,0.224,0.1766,0.7147

@@ -1,0 +1,4 @@
+platform,set,config,reps,n,tps,speedup,ci_lo,ci_hi,mean_len,accept,speedup_captioning,speedup_chart_vqa,speedup_general_vqa,speedup_multi_turn,speedup_reasoning,speedup_text_vqa
+phone,smoke24,B0,1,24,16.69,1.0,1.0,1.0,nan,,1.0,1.0,1.0,1.0,1.0,1.0
+phone,smoke24,B1,1,24,11.55,0.6921,0.5331,0.963,4.455,0.4092,0.5481,0.6436,3.164,0.7315,0.6033,0.3956
+phone,smoke24,B11,1,24,11.17,0.6693,0.4839,0.9708,4.064,0.361,0.4423,0.7109,4.5078,0.714,0.6974,0.3219
