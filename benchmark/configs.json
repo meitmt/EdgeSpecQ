@@ -26,6 +26,30 @@
         "edge":   ["libs/cuda_fix", "libs/fix", "libs/llama_c4"]
       }
     },
+    "phone": {
+      "_doc": "OnePlus 13 (Snapdragon 8 Elite, 24 GB), CPU backend; llama-server runs on the device over adb (scripts/build_android.sh, binaries and models pushed to home). Only C3/C4 apply on CPU, so there are two runtimes.",
+      "home": "/data/local/tmp/edgespecq",
+      "log_home": "~/edgespecq",
+      "adb": {"exe": "/mnt/c/liquid ai/tools/platform-tools/adb.exe", "serial": "b0d367a6"},
+      "ngl": 0,
+      "n_max": 8,
+      "_runtimes": "fixed = master + the C3 scheduler fix (edge's libggml-base.so alone in fixed/lib, searched first)",
+      "bin_dirs": {"master": "master/bin", "fixed": "master/bin", "edge": "edge/bin"},
+      "runtimes": {"master": ["master/lib"], "fixed": ["fixed/lib", "master/lib"], "edge": ["edge/lib"]}
+    },
+    "phone_htp": {
+      "_doc": "OnePlus 13, Hexagon NPU (HTP v79) for target and drafter (scripts/build_android_htp.sh). require_device makes run_eval refuse to measure when the target weights are not on HTP0 (silent CPU fallback).",
+      "home": "/data/local/tmp/edgespecq",
+      "log_home": "~/edgespecq",
+      "adb": {"exe": "/mnt/c/liquid ai/tools/platform-tools/adb.exe", "serial": "b0d367a6"},
+      "ngl": 99,
+      "n_max": 8,
+      "server_args": ["--device", "HTP0", "--device-draft", "HTP0"],
+      "env": {"ADSP_LIBRARY_PATH": "{libs}"},
+      "require_device": "HTP0",
+      "bin_dirs": {"edge": "htp-edge/bin", "master": "htp-master/bin"},
+      "runtimes": {"edge": ["htp-edge/lib"], "master": ["htp-master/lib"]}
+    },
     "rtx5070": {
       "home": "~/edgespecq",
       "llama_dir": "~/edgespecq/llama-edge",

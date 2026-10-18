@@ -7,12 +7,14 @@ answers as history; images go with the first user turn). Each finished sample is
   $HOME/logs/eval/<platform>/<set>/<config>[_<sampling>]/r<rep>.jsonl
 and samples already there are skipped, so an interrupted run resumes where it stopped. If the server dies during a
 request, the crash is logged to crashes_r<rep>.jsonl, the server is restarted and the sample retried once.
+Platforms with an "adb" entry (Android) run only llama-server on the device; this script, the images and the
+results stay on the host, talking to the server through `adb forward`.
 Repetitions rotate the config order so slow drift does not favour one config.
 
 usage: run_eval.py <platform> <set.jsonl> <config,config,...> [--reps 1] [--sampling greedy] [--seed 0]
                    [--max-tokens 512] [--n N]   (N: evenly subsample the set, for smoke runs)
 """
-import argparse, base64, hashlib, http.client, json, os, re, subprocess, time, urllib.request
+import argparse, base64, hashlib, http.client, json, os, re, shlex, subprocess, time, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORT = int(os.environ.get("PORT", 8095))
@@ -43,26 +45,86 @@ def image_part(path):
     return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
 
 
+def adb(plat, *args, **kw):
+    """Run an adb command for a remote (Android) platform; returns stdout."""
+    a = plat["adb"]
+    return subprocess.run([a["exe"], "-s", a["serial"], *args], capture_output=True, text=True, **kw).stdout
+
+
 class Server:
+    """llama-server for one config. Local platforms run it as a child process; a platform with an "adb" entry runs
+    it on the device (`adb shell`, port forwarded with `adb forward`) and streams its log back over adb."""
+
     def __init__(self, plat, cfg, logpath):
-        home = expand(plat["home"])
+        self.plat = plat
+        self.remote = "adb" in plat
+        home = plat["home"] if self.remote else expand(plat["home"])
         n_max = cfg.get("n_max") or plat["n_max"]
-        self.args = [f"{expand(plat['llama_dir'])}/build/bin/llama-server",
+        ngl = str(plat.get("ngl", 99))
+        if "bin_dirs" in plat:
+            binary = f"{home}/{plat['bin_dirs'][cfg['runtime']]}/llama-server"
+        else:
+            binary = f"{expand(plat['llama_dir'])}/build/bin/llama-server"
+        self.args = [binary,
                      "-m", model_path(home, cfg["target"], "target"),
                      "--mmproj", f"{home}/models/target/mmproj-LFM2.5-VL-3B-Q8_0.gguf",
-                     "-ngl", "99", "-fa", "on", "-c", "8192", "-np", "1", "--port", str(PORT)]
+                     "-ngl", ngl, "-fa", "on", "-c", "8192", "-np", "1", "--port", str(PORT)]
         if cfg.get("draft"):
-            self.args += ["-md", model_path(home, cfg["draft"], "draft"), "-ngld", "99",
+            self.args += ["-md", model_path(home, cfg["draft"], "draft"), "-ngld", ngl,
                           "--spec-type", "draft-dspark", "--spec-draft-n-max", str(n_max), "--spec-draft-n-min", "0"]
         self.args += plat.get("server_args", [])
         libs = ":".join(f"{home}/{d}" for d in plat["runtimes"][cfg["runtime"]])
-        self.env = {**os.environ, "LD_LIBRARY_PATH": libs + ":" + os.environ.get("LD_LIBRARY_PATH", "")}
+        # extra environment, e.g. ADSP_LIBRARY_PATH for the Hexagon NPU ("{libs}" = the runtime's library dirs)
+        extra = {k: v.replace("{libs}", libs) for k, v in plat.get("env", {}).items()}
+        if self.remote:
+            self.env = {"LD_LIBRARY_PATH": libs, **extra}
+            envs = " ".join(f"{k}={shlex.quote(v)}" for k, v in self.env.items())
+            self.cmd = [plat["adb"]["exe"], "-s", plat["adb"]["serial"], "shell",
+                        f"cd {home} && {envs} exec " + " ".join(shlex.quote(x) for x in self.args)]
+        else:
+            self.env = {**os.environ, **extra, "LD_LIBRARY_PATH": libs + ":" + os.environ.get("LD_LIBRARY_PATH", "")}
+            self.cmd = self.args
+        self.require = plat.get("require_device")  # e.g. "HTP0": refuse to measure if the target is not placed there
         self.logpath = logpath
         self.log_pos = 0
 
+    def probe_placement(self):
+        """Load the same config once with a verbose log (-lv 4: buffer layout, graph splits, unsupported ops) on a
+        side port, then stop it; the measured server runs at the normal log level."""
+        port = str(PORT + 1)
+        args = [port if a == str(PORT) else a for a in self.args] + ["-lv", "4"]
+        log = self.logpath.replace(".log", "_probe.log")
+        envs = " ".join(f"{k}={shlex.quote(v)}" for k, v in self.env.items())
+        home = self.plat["home"]
+        with open(log, "w") as f:
+            p = subprocess.Popen([*self.cmd[:4], f"cd {home} && {envs} exec " + " ".join(shlex.quote(x) for x in args)],
+                                 stdout=f, stderr=subprocess.STDOUT)
+            for _ in range(180):
+                time.sleep(1)
+                if "listening on" in open(log, errors="replace").read() or p.poll() is not None:
+                    break
+            adb(self.plat, "shell", f"pkill -f '^{home}/.*/bin/llama-server .*--port {port}'")
+            p.wait(timeout=60)
+        text = open(log, errors="replace").read()
+        pl = placement(text)
+        pl["clip_backend"] = (re.findall(r"CLIP using (\S+) backend", text) or [None])[0]
+        pl["unsupported_ops"] = sorted(set(re.findall(r"warmup:\s+(\w+): type = ", text)))
+        return pl
+
     def __enter__(self):
         self.log = open(self.logpath, "w")
-        self.proc = subprocess.Popen(self.args, stdout=self.log, stderr=subprocess.STDOUT, env=self.env)
+        if self.require:
+            self.placement = self.probe_placement()
+            if not any(d.startswith(self.require) for d in self.placement["model_buffers_mib"]):
+                raise SystemExit(f"target not placed on {self.require}: {self.placement}; see {self.logpath}")
+        if self.remote:
+            # leftovers of an interrupted run: only servers under our own directory (other experiments on the device
+            # may run their own llama-server)
+            adb(self.plat, "shell", f"pkill -f '^{self.plat['home']}/.*/bin/llama-server'")
+            adb(self.plat, "forward", f"tcp:{PORT}", f"tcp:{PORT}")
+            self.proc = subprocess.Popen(self.cmd, stdout=self.log, stderr=subprocess.STDOUT)
+        else:
+            self.proc = subprocess.Popen(self.cmd, stdout=self.log, stderr=subprocess.STDOUT, env=self.env)
         for _ in range(300):
             try:
                 if urllib.request.urlopen(f"http://127.0.0.1:{PORT}/health", timeout=2).status == 200:
@@ -74,7 +136,9 @@ class Server:
         else:
             raise SystemExit("server did not become ready")
         post({"messages": [{"role": "user", "content": "Hello"}], "max_tokens": 16, "temperature": 0})  # warmup
-        self.new_log()
+        log = self.new_log()
+        if not self.require:
+            self.placement = placement(log)
         return self
 
     def new_log(self):
@@ -87,20 +151,44 @@ class Server:
         return s
 
     def __exit__(self, *exc):
+        if self.remote:
+            adb(self.plat, "shell", f"pkill -f '^{self.plat['home']}/.*/bin/llama-server'")
         self.proc.terminate()
         self.proc.wait()
         self.log.close()
 
 
-def mem_state():
+def placement(log):
+    """Where the weights went and how fragmented the graphs are, from the server's start-up log: model buffer size
+    per device (target and drafter loads both listed, in load order) and the scheduler's graph split counts."""
+    bufs = {}
+    for dev, mib in re.findall(r"load_tensors:\s+(\S+) model buffer size\s*=\s*([0-9.]+) MiB", log):
+        bufs[dev] = round(bufs.get(dev, 0) + float(mib), 1)
+    splits = [int(s) for s in re.findall(r"splits = (\d+)", log)]
+    return {"model_buffers_mib": bufs, "graph_splits": splits}
+
+
+def mem_state(plat):
     """MemAvailable / swap in use (MiB) and the cumulative swap-in/out page counters, recorded after every sample so
-    that samples measured under memory pressure can be flagged (a counter increase between rows = swapping)."""
+    that samples measured under memory pressure can be flagged (a counter increase between rows = swapping).
+    On an adb platform they are read from the device, plus the battery temperature (thermal throttling)."""
     try:
-        m = {l.split(":")[0]: int(l.split()[1]) for l in open("/proc/meminfo")}
-        v = {l.split()[0]: int(l.split()[1]) for l in open("/proc/vmstat")}
-        return {"mem_avail_mb": m["MemAvailable"] // 1024, "swap_mb": (m["SwapTotal"] - m["SwapFree"]) // 1024,
-                "pswpin": v["pswpin"], "pswpout": v["pswpout"]}
-    except (OSError, KeyError, ValueError, IndexError):
+        if "adb" in plat:
+            out = adb(plat, "shell", "cat /proc/meminfo /proc/vmstat; dumpsys battery | grep temperature", timeout=30)
+            lines = out.splitlines()
+        else:
+            lines = open("/proc/meminfo").read().splitlines() + open("/proc/vmstat").read().splitlines()
+        kv = {}
+        for l in lines:
+            parts = l.replace(":", " ").split()
+            if len(parts) >= 2 and parts[1].lstrip("-").isdigit():
+                kv.setdefault(parts[0], int(parts[1]))
+        r = {"mem_avail_mb": kv["MemAvailable"] // 1024, "swap_mb": (kv["SwapTotal"] - kv["SwapFree"]) // 1024,
+             "pswpin": kv["pswpin"], "pswpout": kv["pswpout"]}
+        if "temperature" in kv:
+            r["battery_temp_c"] = kv["temperature"] / 10
+        return r
+    except (OSError, KeyError, ValueError, IndexError, subprocess.SubprocessError):
         return {}
 
 
@@ -147,7 +235,8 @@ def main():
         samples = samples[::max(1, len(samples) // a.n)][:a.n]
     set_name = os.path.splitext(os.path.basename(a.set))[0] + (f"_n{a.n}" if a.n else "")
     suffix = "" if a.sampling == "greedy" else f"_{a.sampling}_s{a.seed}"
-    base = f"{expand(plat['home'])}/logs/eval/{a.platform}/{set_name}"
+    # results stay on the machine running this script (for adb platforms "home" is a path on the device)
+    base = f"{expand(plat.get('log_home', plat['home']))}/logs/eval/{a.platform}/{set_name}"
 
     for rep in range(1, a.reps + 1):
         k = (rep - 1) % len(names)
@@ -171,7 +260,8 @@ def main():
                 log = f"{outdir}/server_r{rep}.log" if starts == 0 else f"{outdir}/server_r{rep}_restart{starts}.log"
                 starts += 1
                 with Server(plat, cfg, log) as srv:
-                    json.dump({"argv": srv.args, "LD_LIBRARY_PATH": srv.env["LD_LIBRARY_PATH"]},
+                    json.dump({"argv": srv.args, "LD_LIBRARY_PATH": srv.env["LD_LIBRARY_PATH"],
+                               "placement": srv.placement},
                               open(f"{outdir}/server_r{rep}.json", "w"), indent=1)
                     while queue:
                         s = queue[0]
@@ -189,7 +279,7 @@ def main():
                             break
                         queue.pop(0)
                         with open(out, "a") as f:
-                            f.write(json.dumps({"id": s["id"], "src": s["src"], "turns": turns, **mem_state()}) + "\n")
+                            f.write(json.dumps({"id": s["id"], "src": s["src"], "turns": turns, **mem_state(plat)}) + "\n")
                         with open(f"{outdir}/outputs_r{rep}.jsonl", "a") as f:
                             f.write(json.dumps({"id": s["id"], "texts": texts}, ensure_ascii=False) + "\n")
             n_pred = 0; pred_ms = 0
