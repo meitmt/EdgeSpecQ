@@ -9,7 +9,7 @@ usage: summarize_eval.py <platform> <set> [--ref B0] [--configs B1,B2,...] [--cs
 import argparse, csv, glob, json, os, random, statistics
 from collections import defaultdict
 
-HOME = {"jetson": "~/mt_test/liquid_ai", "rtx5070": "~/edgespecq"}
+HOME = {"jetson": "~/mt_test/liquid_ai", "jetson_25w": "~/mt_test/liquid_ai", "rtx5070": "~/edgespecq"}
 
 
 def load(base, cfg):
