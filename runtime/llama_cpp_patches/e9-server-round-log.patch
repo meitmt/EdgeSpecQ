@@ -1,0 +1,25 @@
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index a18b7542c..6f895591e 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -4544,6 +4544,20 @@ private:
+                 }
+                 slot.spec_i_batch.clear();
+ 
++                // E9: per freshly drafted round, the draft, how many of its leading tokens were accepted and the
++                // target's tokens (accepted + the one it chose at the first mismatch or after the draft)
++                if (!slot.spec_is_replay) {
++                    std::string s = "E9S n_acc=" + std::to_string(accepted.size() - 1) + " draft=";
++                    for (size_t i = 0; i < slot.spec_draft.size(); ++i) {
++                        s += (i ? "," : "") + std::to_string(slot.spec_draft[i]);
++                    }
++                    s += " ids=";
++                    for (size_t i = 0; i < accepted.size(); ++i) {
++                        s += (i ? "," : "") + std::to_string(accepted[i]);
++                    }
++                    LOG_INF("%s\n", s.c_str());
++                }
++
+                 GGML_ASSERT(accepted.size() >= 1);
+ 
+                 const uint32_t n_rollback = slot.spec_draft.size() + 1 - accepted.size();
