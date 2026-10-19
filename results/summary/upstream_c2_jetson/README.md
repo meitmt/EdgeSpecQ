@@ -16,3 +16,7 @@ Only `libggml-cuda.so` differs between the two builds. Measured 2026-10-19; desk
   (the two builds share a commit, so they were relabeled 7951f601 / c2orin00 before comparing).
 - `bwcheck.log`: read-bandwidth ceiling (`analysis/bwread.cu`) and Nsight Compute on the n=1 GEMVs. DRAM counters
   are not available on this Tegra (n/a); L2 traffic per GEMV equals the weight size, so each weight is read once.
+- `fusion.jsonl`: pure Q6_K and pure Q4_0, `llama-bench -p 0 -n 128 -r 5`, `GGML_CUDA_DISABLE_FUSION=0/1`, builds
+  interleaved, 2 rounds. With fusion disabled the patch gains +25 % (Q6_K) and +56 % (Q4_0) instead of +2 % / +38 %:
+  the fused gate/up mat-vec path absorbs most of the small-K gain for some K-quants. The variable disables all CUDA
+  fusions, so the gate/up fusion is the likely but not isolated cause.

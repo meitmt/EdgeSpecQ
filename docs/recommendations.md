@@ -69,7 +69,7 @@ decoding because of batch-shape-dependent kernel numerics (see A6).
 | # | Issue | Effect | Status |
 |---|---|---|---|
 | C1 | CUDA picks MMVQ for short-K (K ≤ 256), single-column quantized GEMV such as the Markov head, which is slow | Jetson speculation +16–30 %, desktop +4–5 % when fixed | patch `runtime/llama_cpp_patches/e8-shortk-igpu.patch` |
-| C2 | Integrated GPUs do not use the small-K MMVQ layout for single-column GEMV | Jetson target-only decode +15 % when fixed | same patch |
+| C2 | Jetson Orin does not use the small-K MMVQ layout for single-column GEMV | Jetson target-only decode +15 % for Q4_K_M; −1 % to +38 % by quantization type (Q4_0 +38 %, Q8_0 +23 %, Q6_K +2 %); the fused gate/up path absorbs most of the gain for some K-quants | same patch; Orin-only version for current master: `upstream-c2-orin-mmvq-small-k.patch` |
 | C3 | After #29622, LFM2 text decode copies split inputs of unselected graph branches every token | desktop +3.5–4.2 % when fixed | `0001-ggml-skip-copying-split-inputs-of-unselected-branches.patch` |
 | C4 | With a reduced draft vocabulary, the DSpark Markov chain still scatters to the full 128k vocabulary at every position | Jetson +3 %, desktop from −2 % to +6 % when fixed | `e9-c4-draft-space.patch` (needs an I32 `d2t`) |
 | C5 | Hexagon backend: verifying 2–9 tokens costs about 1.8× a single-token decode (HMX path fixed cost; HVX is twice slower) | caps DSpark on the phone NPU at ~1.3× | to report |

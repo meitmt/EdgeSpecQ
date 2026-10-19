@@ -17,7 +17,7 @@ real edge hardware, where the time goes, and what can be changed in the deployme
 |---|---|
 | **Speedup on an 8 GB Jetson** | Unpatched target-only decode 27.1 t/s → official F16 drafter 50.4 t/s → **86.6 t/s** with our drafter and runtime changes: **3.20×** over target-only and **1.72×** over the official drafter as shipped (dev120, 6 multimodal task categories, MAXN_SUPER). 3.07× in the factory-default 25 W mode. |
 | **Drafter changes, no retraining** | Quantized (P3: decoder Q4_K, projection and Markov head Q8_0) and reduced-vocabulary (32k of 128k tokens) DSpark drafters, exported from the official F16 GGUF. Outputs are identical to the full-vocabulary drafter's. Regenerating them from this repository gives bit-identical files (checked by SHA256). |
-| **Four llama.cpp runtime fixes** | C1/C2: CUDA kernel selection for short-K GEMV and integrated GPUs (Jetson target-only decode **+15.3 %** for every model, DSpark +16–30 %). C3: per-token copies after upstream #29622 (desktop +3.5–4.2 %). C4: DSpark Markov chain kept in the draft vocabulary (Jetson +3 %, desktop −8 % → on par). |
+| **Four llama.cpp runtime fixes** | C1/C2: CUDA kernel selection for short-K GEMV and Jetson Orin (target-only decode **+15 %** for Q4_K_M models; on current master −1 % to +38 % depending on the quantization type; DSpark +16–30 %). C3: per-token copies after upstream #29622 (desktop +3.5–4.2 %). C4: DSpark Markov chain kept in the draft vocabulary (Jetson +3 %, desktop −8 % → on par). |
 | **Where the time goes** | Per-round breakdowns on all three platforms. On Jetson the Markov head was over half the drafter time, a cost that large-cache hardware hides. On the phone NPU, verifying 2–9 tokens costs about 1.8× a single-token decode, which caps DSpark there at about 1.3×. |
 | **Japanese** | DSpark gives about 70 % of its English gain on Japanese (desktop 1.30× vs 1.80×, Jetson 1.98× vs 2.77×). The cause, measured round by round: the **target's own uncertainty on kanji**, amplified by tokenization (1.5 vs 4.7 characters per token). It is not a weaker drafter, and there is no gap on open-ended text. |
 | **Robustness** | Holds under the model card's sampling settings (1.77× vs 1.80× greedy on desktop, 2.69× vs 2.77× on Jetson, 3 seeds), and in the default power mode. Speculative output with quantized targets differs from greedy only at near-ties, a runtime-numerics effect; F16 targets match exactly. |
@@ -173,7 +173,7 @@ unattributed remainder of its total.
 - **Jetson: the drafter is the bottleneck, and inside it the Markov head.**
   - Nsight shows 8 serial single-column GEMVs over `markov_w2` (256 × 128k) per round, 1.67 ms each. That is
     about 13.5 ms, or 54 % of draft time.
-  - The same GEMV takes 88 µs on the desktop, where the 33 MB matrix sits in the 48 MB L2. The Jetson's 4 MB L2
+  - The same GEMV takes 88 µs on the desktop, where the 33 MB matrix sits in the 48 MB L2. The Jetson's 2 MB L2
     sends every read to DRAM.
   - This cost is invisible on the large-cache hardware of the official benchmarks.
   - Verification on Jetson is almost free (1.07× a single token), so speculation pays off most there.
@@ -197,7 +197,7 @@ Files: `phone_breakdown/*.json`, `e9c4_jetson_maxn_breakdown_n6.json`. The Nsigh
 | # | Problem | Fix | Measured effect | Correctness check |
 |---|---|---|---|---|
 | C1 | CUDA uses MMVQ for single-column quantized GEMV with K ≤ 256, such as the Markov head. At K = 256, MMQ is 1.8–3.0× faster on sm_87. | Route that case to MMQ on Turing+ (`e8-shortk-igpu.patch`) | Jetson DSpark +16.5 / +17.0 / +29.9 / +17.8 % (Q8_0 / P3 / Q4_K_M / Q4_0 drafter); desktop +3.7–5.2 % | `test-backend-ops -o MUL_MAT` same as master; acceptance unchanged |
-| C2 | Integrated GPUs do not use the small-K MMVQ layout for N = 1 | Detect integrated GPUs and use small-K (same patch) | **Jetson target-only decode 27.27 → 31.43 t/s (+15.3 %)**, also +15.3 % on the 2.6B text model; no change on desktop | as C1 |
+| C2 | Integrated GPUs do not use the small-K MMVQ layout for N = 1 | Detect integrated GPUs and use small-K (same patch) | **Jetson target-only decode 27.27 → 31.43 t/s (+15.3 %)** with Q4_K_M, also +15.3 % on the 2.6B text model; no change on desktop. Rebased on master (Orin-only, `results/summary/upstream_c2_jetson/`): by quantization type −1 % (Q3_K_S) to +38 % (Q4_0); Q2_K, Q6_K, IQ4_XS only +2 % because the fused gate/up mat-vec path absorbs the gain (with CUDA fusion disabled, Q6_K gains +25 %) | as C1; perplexity identical |
 | C3 | After upstream #29622, LFM2 text decode copies the inputs of unselected graph branches every token (CUDA syncs per 64 tokens 1312 → 1767) | Skip copying split inputs that only unselected branches read (`0001-…patch`) | desktop tg256 +3.5 % (2.6B), +4.2 % (VL-3B); sync count back to 1312; Jetson +0.2 % | 80 outputs byte-identical to master; `test-llama-archs` 402 OK |
 | C4 | With a reduced draft vocabulary, the DSpark Markov chain still scatters to 128k at every draft position | With I32 `d2t`, add the bias, take argmax and map ids in draft space, and scatter once (`e9-c4-draft-space.patch`, `src/models/dflash.cpp`) | Jetson draft 7.4 → 6.3 ms per round, end-to-end +2.9 %; desktop A6 → A7 +8.5 % | I64 and I32 drafters give the same draft tokens and accepted counts over 3140 rounds |
 
