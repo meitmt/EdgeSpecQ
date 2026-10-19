@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Summarize regression/run_eval.py results: per config and task category, decode t/s (token-weighted over all
-turns, median over repetitions), mean accepted length, acceptance, and the paired decode speedup over a reference
-config with a 95% bootstrap interval over samples (samples resampled within the set; per-sample decode time is the
-median over repetitions).
+turns), mean accepted length, acceptance, and the paired decode speedup over a reference config with a 95%
+bootstrap interval over samples (samples resampled within the set; per sample, tokens and decode time come from the
+repetition with the median decode time).
 
 usage: summarize_eval.py <platform> <set> [--ref B0] [--configs B1,B2,...] [--csv out.csv]
 """
@@ -31,8 +31,11 @@ def per_sample(reps):
     ids = set.intersection(*(set(r) for r in reps.values())) if reps else set()
     for i in ids:
         rows = [r[i] for r in reps.values()]
-        r0 = rows[0]
-        secs = statistics.median(tot(r, "pred_ms") / 1000 for r in rows)
+        # the repetition with the median decode time supplies both tokens and time (outputs can differ between
+        # repetitions, so tokens and time must come from the same run)
+        rows.sort(key=lambda r: tot(r, "pred_ms"))
+        r0 = rows[len(rows) // 2]
+        secs = tot(r0, "pred_ms") / 1000
         w = [(t["mean_len"], t["n_pred"] or 0) for t in r0["turns"] if t["mean_len"]]
         ml = sum(m * n for m, n in w) / sum(n for _, n in w) if w and sum(n for _, n in w) else None
         out[i] = (r0["src"], tot(r0, "n_pred"), secs, tot(r0, "draft_acc"), tot(r0, "draft_n"), ml)
