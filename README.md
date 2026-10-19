@@ -2,7 +2,12 @@
 
 Quantized DSpark speculative decoding for LFM2.5-VL on real edge devices (phone, Jetson, desktop GPU).
 
-Work in progress.
+Work in progress. Results, contributions and step-by-step reproduction: [`docs/report.md`](docs/report.md);
+deployment recommendations: [`docs/recommendations.md`](docs/recommendations.md).
+
+Headline (dev120, six multimodal task categories): on an 8 GB Jetson Orin Nano Super, LFM2.5-VL-3B decodes at
+27.1 t/s without speculation, 50.4 t/s with the official F16 DSpark drafter, and 86.6 t/s (3.20×) with a quantized,
+reduced-vocabulary drafter (no retraining, identical outputs) plus four llama.cpp runtime fixes.
 
 ## Layout
 
@@ -29,6 +34,13 @@ Work in progress.
 | `analysis/e9_simulate.py` | Acceptance of a reduced draft vocabulary, simulated from full-vocabulary rounds |
 | `quantization/make_reduced_vocab_drafter.py` | Lossless reduced-vocabulary DSpark drafter export (row slices + `d2t`), no retraining |
 | `scripts/make_e9_drafters.sh`, `scripts/run_e9_vocab.sh` | Build the 16k–48k drafters; end-to-end acceptance and t/s against the full-vocabulary drafter |
+| `quantization/vocab_freq.npz` | Token-frequency counts behind the released reduced vocabularies (regenerates B11/B12 drafters bit for bit) |
+| `benchmark/build_eval_set.py`, `benchmark/build_ja_set.py` | Seeded six-category multimodal sets (smoke24 / dev120 / final600) and the Japanese ja75 set |
+| `benchmark/configs.json`, `benchmark/manifests/` | Platforms, sampling presets and configurations; sample IDs and model SHA256 |
+| `regression/run_eval.py`, `analysis/summarize_eval.py` | Resumable evaluation harness (local and adb) and paired-speedup summaries with bootstrap intervals |
+| `scripts/build_runtimes.sh`, `scripts/build_android.sh`, `scripts/build_android_htp.sh` | master / fixed / edge runtimes for CUDA, Android CPU and Hexagon NPU |
+| `scripts/jetson_measure.sh` | Run a command on the Jetson with the desktop stopped and MAXN_SUPER, restoring everything afterwards |
+| `analysis/e8_breakdown.py`, `analysis/e9_lang_rounds.py`, `analysis/e9_lang_analyze.py` | Per-round time breakdown (local and adb); Japanese acceptance root-cause analysis |
 
 ## Setup (WSL2 / Linux, CUDA)
 

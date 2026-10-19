@@ -17,13 +17,20 @@ import numpy as np
 import gguf
 
 HOME = os.path.expanduser(os.environ.get("EDGESPECQ_HOME", "~/edgespecq"))
+# committed copy of the results/e9/freq_*.npy counts used for the released drafters (used when those are absent)
+FREQ_NPZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vocab_freq.npz")
+
+
+def freq(name):
+    p = f"{HOME}/results/e9/freq_{name}.npy"
+    return np.load(p) if os.path.exists(p) else np.load(FREQ_NPZ)[name]
 
 
 def draft_vocab(target_reader, n, mix):
     types = np.array(target_reader.get_field("tokenizer.ggml.token_type").contents())
     score = 0
     for name, w in mix.items():
-        c = np.load(f"{HOME}/results/e9/freq_{name}.npy").astype(np.float64)
+        c = freq(name).astype(np.float64)
         score = score + w * c / c.sum()
     always = np.flatnonzero((types == gguf.TokenType.CONTROL) | (types == gguf.TokenType.USER_DEFINED))
     score = np.asarray(score).copy()
