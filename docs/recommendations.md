@@ -50,9 +50,9 @@ decoding because of batch-shape-dependent kernel numerics (see A6).
 | A9 | **On 8 GB devices set `--cache-ram 0` (or small)** for llama-server: its 8 GiB default host prompt cache fills the board within one run and leads to swap, CUDA graph instantiation failures and OOM kills. A Q8_0 target with mmproj and a drafter does not fit reliably in 8 GB; use Q4-class targets. | Jetson run logs, 2026-10-17 |
 | A10 | **On phones use the Hexagon NPU, and do not enable speculation on the CPU.** NPU decode is 1.5× the CPU's and prompt processing (including image encoding) more than 8× faster; DSpark gives +29 % on the NPU but −31 % on the CPU. Keep target and drafter on the NPU: moving the drafter to the GPU or CPU is slower (cross-device transfers). | `phone_htp_dev120.csv`, `phone_cpu_smoke24.csv`, `phone_breakdown/` |
 | A11 | Speculative decoding on the phone NPU slows down short-answer tasks (0.8–1.0× on GQA, TextVQA, multiple choice); enable it per task or only for long generations. | `phone_htp_dev120.csv` per-category columns |
-| A12 | **Expect much less from DSpark on Japanese.** On 75 Japanese samples (JMMMU, JA-VLM-Bench-In-the-Wild, JA-VG-VQA-500, ELYZA-tasks-100, Japanese captioning) the best configuration gives 1.30× on the RTX 5070 vs 1.80× on English dev120; the official F16 drafter gives no gain (1.00×). On the same 15 COCO images, captioning in Japanese has a 15–18 % shorter accepted length than in English (3.36 vs 3.93) and 1.61× instead of 1.94×. *Jetson confirmation pending.* | `ja75_rtx5070.csv` |
-| A13 | **Speculation holds under the model card's sampling settings** (temperature 0.2, top-k 50): 1.77× for the best configuration vs 1.80× greedy on the RTX 5070, same ranking of drafters, ±4 % across 3 seeds. At temperature 0.7 acceptance drops and the gain falls to 1.5×. *Jetson confirmation pending.* | `sampling_rtx5070.csv` |
-| A14 | **Tailor a reduced vocabulary to the deployment language.** A 16k vocabulary whose ranking weights Japanese output is as fast as the 32k one on Japanese captioning (363 vs 365 t/s) but 14 % slower on English captioning. | `ja75_rtx5070.csv`, `dev120_rtx5070.csv` |
+| A12 | **Expect much less from DSpark on Japanese.** On 75 Japanese samples (JMMMU, JA-VLM-Bench-In-the-Wild, JA-VG-VQA-500, ELYZA-tasks-100, Japanese captioning) the best configuration gives 1.30× on the RTX 5070 (vs 1.80× on English dev120) and 1.98–2.02× on Jetson (vs 2.77×); the official F16 drafter gives 1.00× and 1.21×. On the same 15 COCO images, captioning in Japanese has a 15–18 % shorter accepted length than in English (3.36 vs 3.93 on the RTX 5070) and 1.61× instead of 1.94×. | `ja75_rtx5070.csv`, `ja75_jetson_maxn.csv` |
+| A13 | **Speculation holds under the model card's sampling settings** (temperature 0.2, top-k 50): the best configuration gives 1.77× vs 1.80× greedy on the RTX 5070 and 2.69× vs 2.77× on Jetson, with the same ranking of drafters and ±4 % across 3 seeds. At temperature 0.7 acceptance drops and the gain falls to 1.5× (RTX 5070) and 2.35× (Jetson, 1 seed). | `sampling_rtx5070.csv`, `sampling_jetson_maxn.csv` |
+| A14 | **Tailor a reduced vocabulary to the deployment language.** A 16k vocabulary whose ranking weights Japanese output matches or beats the 32k one on Japanese (RTX 5070 1.30× vs 1.30×, Jetson 2.02× vs 1.98×) while being slower on English (dev120: 1.63× vs 1.80× on the RTX 5070, 2.59× vs 2.77× on Jetson). | `ja75_*.csv`, `dev120_*.csv` |
 
 ## Model-side observations for DSpark
 
@@ -79,7 +79,8 @@ decoding because of batch-shape-dependent kernel numerics (see A6).
 
 - 120 samples per platform (6 × 20), 2–3 repetitions; the confidence intervals cover sample variation, not
   run-to-run drift (about 3 % on the unlocked RTX 5070).
-- Sampling was checked on the RTX 5070 (A13); all other numbers are greedy.
+- Sampling was checked on the RTX 5070 and Jetson (A13); all other numbers are greedy.
+- The Japanese set has 75 samples (15 per category) and 2–3 repetitions; the phone was not measured on Japanese.
 - The phone's CPU is capped by the OEM power policy at 1.79 / 1.69 GHz for adb-launched processes (hardware
   3.53 / 4.32 GHz); a foreground app may get more. The phone NPU dev120 run heated the battery from 32 to 51 °C;
   speeds in the second half are indicative (`phone_htp_dev120_thermal.json`).
