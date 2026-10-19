@@ -17,6 +17,8 @@ usage: run_eval.py <platform> <set.jsonl> <config,config,...> [--reps 1] [--samp
 import argparse, base64, hashlib, http.client, json, os, re, shlex, subprocess, time, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# server port; a platform's "port" overrides it (with WSL mirrored networking, adb forwards and local servers share
+# localhost, so concurrent runs on different platforms need different ports)
 PORT = int(os.environ.get("PORT", 8095))
 
 
@@ -162,6 +164,7 @@ class Server:
     def __exit__(self, *exc):
         if self.remote:
             adb(self.plat, "shell", f"pkill -f '^{self.plat['home']}/.*/bin/llama-server'")
+            adb(self.plat, "forward", "--remove", f"tcp:{PORT}")
         self.proc.terminate()
         self.proc.wait()
         self.log.close()
@@ -242,6 +245,8 @@ def main():
     samples = [json.loads(l) for l in open(a.set)]
     if a.n:
         samples = samples[::max(1, len(samples) // a.n)][:a.n]
+    global PORT
+    PORT = int(plat.get("port", PORT))
     set_name = os.path.splitext(os.path.basename(a.set))[0] + (f"_n{a.n}" if a.n else "")
     suffix = "" if a.sampling == "greedy" else f"_{a.sampling}_s{a.seed}"
     # results stay on the machine running this script (for adb platforms "home" is a path on the device)
@@ -297,10 +302,19 @@ def main():
                                 queue.pop(0)
                             break
                         queue.pop(0)
+                        st = mem_state(plat)
                         with open(out, "a") as f:
-                            f.write(json.dumps({"id": s["id"], "src": s["src"], "turns": turns, **mem_state(plat)}) + "\n")
+                            f.write(json.dumps({"id": s["id"], "src": s["src"], "turns": turns, **st}) + "\n")
                         with open(f"{outdir}/outputs_r{rep}.jsonl", "a") as f:
                             f.write(json.dumps({"id": s["id"], "texts": texts}, ensure_ascii=False) + "\n")
+                        # thermal guard (phones): pause between samples while the device is too hot
+                        guard = (cool or {}).get("pause_above_c")
+                        if guard and (st.get("battery_temp_c") or 0) > guard:
+                            t_p = time.time()
+                            while (mem_state(plat).get("battery_temp_c") or 0) > cool["resume_below_c"]:
+                                time.sleep(20)
+                            print(f"{name}{suffix} r{rep}: paused {time.time() - t_p:.0f}s at battery "
+                                  f"{st['battery_temp_c']} C", flush=True)
             n_pred = 0; pred_ms = 0
             for l in open(out):
                 for t in json.loads(l)["turns"]:

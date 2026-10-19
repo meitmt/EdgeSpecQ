@@ -1,0 +1,4 @@
+platform,set,config,reps,n,tps,speedup,ci_lo,ci_hi,mean_len,accept,speedup_captioning,speedup_chart_vqa,speedup_general_vqa,speedup_multi_turn,speedup_reasoning,speedup_text_vqa
+phone_htp,dev120,B0,1,120,24.41,1.0,1.0,1.0,nan,,1.0,1.0,1.0,1.0,1.0,1.0
+phone_htp,dev120,B1,1,120,29.37,1.2032,1.0843,1.349,4.361,0.3619,1.1624,1.3246,0.8223,1.3598,0.9096,0.8095
+phone_htp,dev120,B11,1,120,31.37,1.2852,1.154,1.4436,4.149,0.3355,1.2496,1.3643,0.8952,1.4546,0.9854,0.8309

@@ -31,7 +31,8 @@
       "home": "/data/local/tmp/edgespecq",
       "log_home": "~/edgespecq",
       "adb": {"exe": "/mnt/c/liquid ai/tools/platform-tools/adb.exe", "serial": "b0d367a6"},
-      "cooldown": {"max_battery_temp_c": 36, "timeout_s": 900},
+      "cooldown": {"max_battery_temp_c": 36, "timeout_s": 900, "pause_above_c": 45, "resume_below_c": 40},
+      "port": 8097,
       "ngl": 0,
       "n_max": 8,
       "_runtimes": "fixed = master + the C3 scheduler fix (edge's libggml-base.so alone in fixed/lib, searched first)",
@@ -43,7 +44,8 @@
       "home": "/data/local/tmp/edgespecq",
       "log_home": "~/edgespecq",
       "adb": {"exe": "/mnt/c/liquid ai/tools/platform-tools/adb.exe", "serial": "b0d367a6"},
-      "cooldown": {"max_battery_temp_c": 36, "timeout_s": 900},
+      "cooldown": {"max_battery_temp_c": 36, "timeout_s": 900, "pause_above_c": 45, "resume_below_c": 40},
+      "port": 8097,
       "ngl": 99,
       "n_max": 8,
       "server_args": ["--device", "HTP0", "--device-draft", "HTP0"],
@@ -66,6 +68,8 @@
 
   "sampling": {
     "greedy": {"temperature": 0},
+    "_liquid": "LFM2.5-VL-3B model card, text generation: temperature 0.2, top_k 50, repetition_penalty 1.0",
+    "liquid": {"temperature": 0.2, "top_k": 50, "repeat_penalty": 1.0},
     "t07":    {"temperature": 0.7, "top_p": 0.95}
   },
 

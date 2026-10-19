@@ -1,0 +1,107 @@
+{
+ "_note": "Measured with the battery heating from ~32 C to ~51 C (sustained NPU load, screen on, USB charging); the cooldown before B1/B11 timed out at ~39 C. Samples are in category order, so the block trend mixes temperature with context length. Not rerun by decision (2026-10-19); treat as indicative.",
+ "blocks": {
+  "B0": [
+   {
+    "samples": "1-30",
+    "battery_c": [
+     31.6,
+     34.4
+    ],
+    "decode_tps": 28.46
+   },
+   {
+    "samples": "31-60",
+    "battery_c": [
+     34.6,
+     41.0
+    ],
+    "decode_tps": 26.58
+   },
+   {
+    "samples": "61-90",
+    "battery_c": [
+     41.0,
+     46.2
+    ],
+    "decode_tps": 24.74
+   },
+   {
+    "samples": "91-120",
+    "battery_c": [
+     46.2,
+     51.1
+    ],
+    "decode_tps": 23.07
+   }
+  ],
+  "B1": [
+   {
+    "samples": "1-30",
+    "battery_c": [
+     38.4,
+     39.9
+    ],
+    "decode_tps": 23.44
+   },
+   {
+    "samples": "31-60",
+    "battery_c": [
+     39.9,
+     43.5
+    ],
+    "decode_tps": 30.64
+   },
+   {
+    "samples": "61-90",
+    "battery_c": [
+     43.5,
+     45.9
+    ],
+    "decode_tps": 27.05
+   },
+   {
+    "samples": "91-120",
+    "battery_c": [
+     45.9,
+     49.5
+    ],
+    "decode_tps": 30.1
+   }
+  ],
+  "B11": [
+   {
+    "samples": "1-30",
+    "battery_c": [
+     37.8,
+     39.1
+    ],
+    "decode_tps": 24.73
+   },
+   {
+    "samples": "31-60",
+    "battery_c": [
+     39.1,
+     43.0
+    ],
+    "decode_tps": 32.93
+   },
+   {
+    "samples": "61-90",
+    "battery_c": [
+     43.0,
+     45.9
+    ],
+    "decode_tps": 27.69
+   },
+   {
+    "samples": "91-120",
+    "battery_c": [
+     45.9,
+     49.3
+    ],
+    "decode_tps": 32.49
+   }
+  ]
+ }
+}
