@@ -50,8 +50,9 @@ decoding because of batch-shape-dependent kernel numerics (see A6).
 | A9 | **On 8 GB devices set `--cache-ram 0` (or small)** for llama-server: its 8 GiB default host prompt cache fills the board within one run and leads to swap, CUDA graph instantiation failures and OOM kills. A Q8_0 target with mmproj and a drafter does not fit reliably in 8 GB; use Q4-class targets. | Jetson run logs, 2026-10-17 |
 | A10 | **On phones use the Hexagon NPU, and do not enable speculation on the CPU.** NPU decode is 1.5× the CPU's and prompt processing (including image encoding) more than 8× faster; DSpark gives +29 % on the NPU but −31 % on the CPU. Keep target and drafter on the NPU: moving the drafter to the GPU or CPU is slower (cross-device transfers). | `phone_htp_dev120.csv`, `phone_cpu_smoke24.csv`, `phone_breakdown/` |
 | A11 | Speculative decoding on the phone NPU slows down short-answer tasks (0.8–1.0× on GQA, TextVQA, multiple choice); enable it per task or only for long generations. | `phone_htp_dev120.csv` per-category columns |
-| A12 | Japanese workloads: *pending the 60-sample confirmation (E7 pilot).* The 10-prompt pilot showed half the English accepted length. | `ja60` runs |
-| A13 | Non-greedy sampling (model-card settings, temperature 0.2 / top-k 50, and temperature 0.7): *pending.* | sampling runs |
+| A12 | **Expect much less from DSpark on Japanese.** On 75 Japanese samples (JMMMU, JA-VLM-Bench-In-the-Wild, JA-VG-VQA-500, ELYZA-tasks-100, Japanese captioning) the best configuration gives 1.30× on the RTX 5070 vs 1.80× on English dev120; the official F16 drafter gives no gain (1.00×). On the same 15 COCO images, captioning in Japanese has a 15–18 % shorter accepted length than in English (3.36 vs 3.93) and 1.61× instead of 1.94×. *Jetson confirmation pending.* | `ja75_rtx5070.csv` |
+| A13 | **Speculation holds under the model card's sampling settings** (temperature 0.2, top-k 50): 1.77× for the best configuration vs 1.80× greedy on the RTX 5070, same ranking of drafters, ±4 % across 3 seeds. At temperature 0.7 acceptance drops and the gain falls to 1.5×. *Jetson confirmation pending.* | `sampling_rtx5070.csv` |
+| A14 | **Tailor a reduced vocabulary to the deployment language.** A 16k vocabulary whose ranking weights Japanese output is as fast as the 32k one on Japanese captioning (363 vs 365 t/s) but 14 % slower on English captioning. | `ja75_rtx5070.csv`, `dev120_rtx5070.csv` |
 
 ## Model-side observations for DSpark
 
@@ -60,7 +61,7 @@ decoding because of batch-shape-dependent kernel numerics (see A6).
 | B1 | The Markov head's cost scales with vocabulary × rank × block length and is serial per draft position. On large-cache GPUs it mostly hits cache; on small-cache edge devices it streams from memory and took more than half of the drafter time before the runtime fixes. | E8 per-round breakdowns |
 | B2 | A reduced-vocabulary release ("edge" DSpark) is nearly free: rows can be sliced losslessly from the existing drafter, keeping outputs identical. On Jetson, P3 + 32k vocabulary + C4 cuts draft time from 13.2 to 6.3 ms per round. | `e9c4_jetson_maxn_breakdown_n6.json` |
 | B5 | Rank the reduced vocabulary by the target's own outputs, including multimodal answers, not by generic corpora: LFM2.5's Markdown, LaTeX and special-whitespace tokens are rare in generic text (32k keeps 85 % of English acceptance with generic ranking, 95.5 % with self-generated text), and a text-only ranking loses 10 % of accepted length on multimodal tasks. | `e9_simulate_5070.json`; dev120 B11 vs A5 |
-| B6 | DSpark acceptance on Japanese is markedly lower than on English (accepted length 2.46 vs 5.05 on a 10-prompt pilot); a Japanese-heavy drafter may be worth training. *60-sample confirmation pending.* | pilot; `ja60` |
+| B6 | DSpark acceptance on Japanese is markedly lower than on English: accepted length about 2.95 on ja75 vs 4.2–4.7 on English dev120, and 15–18 % lower even on the same images and task. A drafter trained or fine-tuned with more Japanese data looks worth it for Japanese deployments. Note also that LFM2.5-VL answers Japanese prompts very briefly unless asked for detail (4-token answers to JMMMU with the instruction after the options). | `ja75_rtx5070.csv` |
 | C6 | The LFM2-VL vision encoder's `UPSCALE` (position-embedding interpolation) is the only vision op the Hexagon backend does not support; it falls back to the CPU. | phone placement probe |
 
 ## Runtime issues found (llama.cpp)
@@ -78,7 +79,7 @@ decoding because of batch-shape-dependent kernel numerics (see A6).
 
 - 120 samples per platform (6 × 20), 2–3 repetitions; the confidence intervals cover sample variation, not
   run-to-run drift (about 3 % on the unlocked RTX 5070).
-- Greedy decoding only until the sampling runs are in.
+- Sampling was checked on the RTX 5070 (A13); all other numbers are greedy.
 - The phone's CPU is capped by the OEM power policy at 1.79 / 1.69 GHz for adb-launched processes (hardware
   3.53 / 4.32 GHz); a foreground app may get more. The phone NPU dev120 run heated the battery from 32 to 51 °C;
   speeds in the second half are indicative (`phone_htp_dev120_thermal.json`).

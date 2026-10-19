@@ -14,7 +14,7 @@ Repetitions rotate the config order so slow drift does not favour one config.
 usage: run_eval.py <platform> <set.jsonl> <config,config,...> [--reps 1] [--sampling greedy] [--seed 0]
                    [--max-tokens 512] [--n N]   (N: evenly subsample the set, for smoke runs)
 """
-import argparse, base64, hashlib, http.client, json, os, re, shlex, subprocess, time, urllib.request
+import argparse, base64, hashlib, http.client, json, os, re, shlex, socket, subprocess, time, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # server port; a platform's "port" overrides it (with WSL mirrored networking, adb forwards and local servers share
@@ -132,21 +132,33 @@ class Server:
             # leftovers of an interrupted run: only servers under our own directory (other experiments on the device
             # may run their own llama-server)
             adb(self.plat, "shell", f"pkill -f '^{self.plat['home']}/.*/bin/llama-server'")
+            adb(self.plat, "forward", "--remove", f"tcp:{PORT}")
+        # a server already answering on this port (e.g. an orphan of an earlier run) would silently receive every
+        # request of this config, so refuse to start
+        if port_in_use(PORT):
+            raise SystemExit(f"port {PORT} is already in use by another process; not starting {self.logpath}")
+        if self.remote:
             adb(self.plat, "forward", f"tcp:{PORT}", f"tcp:{PORT}")
             self.proc = subprocess.Popen(self.cmd, stdout=self.log, stderr=subprocess.STDOUT)
         else:
             self.proc = subprocess.Popen(self.cmd, stdout=self.log, stderr=subprocess.STDOUT, env=self.env)
-        for _ in range(300):
-            try:
-                if urllib.request.urlopen(f"http://127.0.0.1:{PORT}/health", timeout=2).status == 200:
-                    break
-            except Exception:
-                if self.proc.poll() is not None:
-                    raise SystemExit(f"server exited; see {self.logpath}")
-                time.sleep(1)
-        else:
-            raise SystemExit("server did not become ready")
-        post({"messages": [{"role": "user", "content": "Hello"}], "max_tokens": 16, "temperature": 0})  # warmup
+        try:
+            for _ in range(600):
+                try:
+                    if urllib.request.urlopen(f"http://127.0.0.1:{PORT}/health", timeout=2).status == 200:
+                        break
+                except Exception:
+                    if self.proc.poll() is not None:
+                        raise SystemExit(f"server exited; see {self.logpath}")
+                    time.sleep(1)
+            else:
+                raise SystemExit(f"server did not become ready; see {self.logpath}")
+            if self.proc.poll() is not None:  # the answer came from some other process
+                raise SystemExit(f"our server exited but port {PORT} answered; see {self.logpath}")
+            post({"messages": [{"role": "user", "content": "Hello"}], "max_tokens": 16, "temperature": 0})  # warmup
+        except BaseException:
+            self.__exit__()  # never leave our server running when we give up on it
+            raise
         log = self.new_log()
         if not self.require:
             self.placement = placement(log)
@@ -166,8 +178,17 @@ class Server:
             adb(self.plat, "shell", f"pkill -f '^{self.plat['home']}/.*/bin/llama-server'")
             adb(self.plat, "forward", "--remove", f"tcp:{PORT}")
         self.proc.terminate()
-        self.proc.wait()
+        try:
+            self.proc.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            self.proc.kill(); self.proc.wait()
         self.log.close()
+
+
+def port_in_use(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1)
+        return s.connect_ex(("127.0.0.1", port)) == 0
 
 
 def placement(log):
