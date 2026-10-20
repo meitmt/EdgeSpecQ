@@ -150,6 +150,14 @@ For deployment on llama.cpp:
    default host prompt cache does not fit).
 5. On phones use the Hexagon NPU for target and drafter, and do not enable speculation on the CPU. Raising DSpark
    on the NPU above 1.3× needs a cheaper multi-token verification path in the Hexagon backend.
+6. **Expect the Hexagon NPU's output to depend on batch shape, with or without speculation.** Its single-token and
+   multi-token paths give clearly different logits: evaluating the same prompts with a physical batch of 2 instead
+   of 1 moves next-token logprobs by up to 2.6 (up to 4.3 for larger batches) and changes the top-1 token in 1–3
+   of 10 prompts, against at most 0.06 for F16 and 0.6 for quantized weights on CUDA. So prompt chunking alone can
+   change the NPU's greedy output, and speculative output there differs from target-only output more often and at
+   larger margins than on the GPUs (`limitations.md` §1). This belongs with the verification-cost issue above in
+   feedback to the Hexagon backend; evaluations on the NPU should not assume run-to-run equality across batch
+   settings.
 
 ## 6. Correctness
 
