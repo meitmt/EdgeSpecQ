@@ -20,9 +20,17 @@ only the physical batch size `-ub` changes, reference `-ub 1`):
 | Q8_0, CUDA | 0.49 / 0.29 / 0.32 | 0/10 |
 | Q4_K_M, CUDA | 0.22 / 0.29 / 0.58 | 0/10 |
 | Q4_0, CUDA | 1.91 / 2.05 / 1.49 | 0/10 |
-| Q4_K_M, CPU | 0 / 0.34 / 1.23 | 10/10 at ub 2, 0/10 above |
+| Q4_K_M, CPU (x86), short prompts | 0 / 0.34 / 1.23 | 10/10 at ub 2, 0/10 above |
+| Q4_K_M, CPU (x86), long prompts (4 probe prompts joined, a few hundred tokens) | 0.12 at ub 2 | 7/10 at ub 2 |
+| Q4_K_M, phone CPU (ARM), short prompts | 0 / 0.82 / 1.22 | 10/10 at ub 2, 0/10 above |
+| Q4_K_M, phone CPU (ARM), long prompts | 0.21 at ub 2 | 3/5 at ub 2 |
+| Q4_K_M, phone Hexagon NPU | **2.60 / 4.16 / 4.31**, top-1 flipped on 3 / 2 / 1 of 10 | 0/10 |
 
-No top-1 token flipped in these tests, but no CUDA configuration is batch-invariant, F16 included.
+Files: `s3_batch_invariance.txt` (CUDA, x86 short), `s3_batch_invariance_x86_long.txt`,
+`s3_batch_invariance_phone.txt`, `s3_batch_invariance_phone_long.txt`. No CUDA configuration is batch-invariant,
+F16 included. The CPU backend is invariant at batch 2 only for short contexts, on x86 and ARM alike. On the
+Hexagon NPU the single-token and multi-token paths give clearly different logits: even without speculation, the
+NPU's output depends on how a prompt is split into batches.
 
 **Criteria** (defined in proj v1.3, unchanged since): (1) with an F16 target every speculative run must reproduce
 the target-only output exactly; (2) with a quantized target, outputs may differ only where the target-only top-1
@@ -49,12 +57,43 @@ recorded there, and never counts it as identical.
 Configurations: drafters F16 (official), Q8_0 and P3-V32k-i32 (reduced vocabulary with C4), each at `n_max` 1 and 8
 (image probe: `n_max` 8 only).
 
-**Verdict: criteria 2 and 3 hold everywhere; criterion 1 holds on the text probe (120/120) and fails on one image
-prompt, recorded as a known exception** (below). All 30 speculative runs pass with that exception documented; the
-strict result is "pass with 1 known exception", not "identical".
+**smoke24 on all three platforms** (`regression/run_eval.py --logprobs`, judged with `--eval`; 24 multimodal
+samples incl. multi-turn, `max_tokens` 512, edge runtime; files `s3_smoke24_{rtx5070,jetson,phone_htp,phone_cpu}.json`
+and `s3_text10_phone_cpu.json`):
 
-- Every divergence, with every target, happened where the top two candidates were within 0.21 logprob.
-- The CPU control with `n_max` 1 is identical (10/10), as criterion 3 requires.
+| Platform | Target, drafters, `n_max` | Identical | Margin at divergence, median / max | Verdict |
+|---|---|---|---|---|
+| RTX 5070 | Q4_K_M; F16, Q8_0, P3-V32k-i32; 8 | 14/24 each | 0.042 / 0.139 | pass |
+| RTX 5070 | F16; F16, P3-V32k-i32; 8 | 23/24 each | 0.0011 (one sample) | pass with a known exception |
+| RTX 5070 | Q4_0; Q4_0; 8 | 14/24 | 0.033 / 0.256 | pass |
+| Jetson (MAXN) | Q4_K_M; F16, Q8_0, P3-V32k-i32; 6 | 13/24 each | 0.028 / 0.219 | pass |
+| Jetson (MAXN) | Q4_0; Q4_0; 6 | 12/24 | 0.057 / 0.124 | pass |
+| Phone NPU | Q4_K_M; F16, Q8_0, P3-V32k-i32; 8 | 7/24 each | 0.252 / **0.650**; 6 samples above 0.3 | **criterion 2 not met** |
+| Phone CPU | Q4_K_M; F16; 1 | **13/24** | 0.042 / 0.134 | **criterion 3 not met** |
+| Phone CPU | Q4_K_M; F16; 8 | 13/24 | 0.064 / 0.172 | pass |
+| Phone CPU, text, 10 prompts × 128 tokens | Q4_K_M; F16; 1 / 8 | 10/10 / 5/10 | — / 0.086 | pass |
+
+**Verdict.** On the RTX 5070 and Jetson all three criteria hold, with two documented F16 exceptions (one per
+probe set, below). **On the phone they do not:** criterion 2 fails on the Hexagon NPU and criterion 3 fails on the
+CPU for image prompts. The criteria are kept as written; the phone failures are recorded with their causes:
+
+- **They are platform numerics, not DSpark logic.** The first generated token, which comes from prefill alone, has
+  bit-identical top-3 logprobs in the speculative run and its reference in every comparison checked (B1 on each
+  platform, B1n1 on the phone CPU). Phone CPU reruns
+  reproduce both the target-only and the `n_max` 1 outputs exactly, and the divergences recur at the same tokens.
+  On the NPU all 17 divergences pick the target-only second choice.
+- **Phone NPU:** batch-shape drift (2.6–4.3 logprob, top-1 flips without speculation) is far above the 0.3 margin
+  that criterion 2 allows, so no threshold of that size can hold on this backend.
+- **CPU, `n_max` 1:** the premise of criterion 3 (CPU numerics do not change at batch 2) holds only for short
+  contexts. The image prompts put several hundred tokens in the KV cache before decoding starts, where the batch-2
+  path already drifts by up to 0.21 (ARM) or 0.12 (x86); the divergences are within that (margin ≤ 0.134). The
+  text-only control on the same phone is identical (10/10), like the x86 text control above.
+- Two phone CPU prompts once ran at 1.2–1.9 tokens/s (prefill) instead of about 31: the OEM power policy throttles
+  adb-launched processes at times. Outputs are unaffected; it matters only for timeouts.
+
+Notes that hold for both matrices:
+
+- Apart from the phone NPU, every divergence happened where the top two candidates were within 0.26 logprob.
 - For a given target and `n_max`, the three drafters diverge on the same prompts at the same tokens with the same
   margins: DSpark always drafts a full block, so the verification batch shape depends only on `n_max`, not on the
   drafter. The drafter choice (quantization, reduced vocabulary, C4) does not change the target's output.
@@ -63,9 +102,10 @@ strict result is "pass with 1 known exception", not "identical".
   chose " pattern". This is about a tenth of the F16 CUDA batch-shape variation measured above, so the v1.3 premise
   that F16 targets reproduce target-only output exactly holds only up to such ties; the criterion is kept as
   written and the case documented rather than relaxed after the fact.
-- **Coverage gap.** The protocol (proj §4.5) asks for the 24-sample multimodal set (smoke24) on all three
-  platforms. This matrix covers the RTX 5070 only, with the 20-prompt text probe and the 20-prompt image probe;
-  Jetson and phone have not been run under the S3 judge.
+- **Known exception — the smoke24 F16 divergence** (`mmmupro_test_Materials_230`, token 198 of 512, both drafters):
+  "_E" vs "_A" after "tension T" at −0.9549 vs −0.9560 (margin 0.0011); the step-by-step answers differ from there on. Same
+  mechanism. Across the 44 multimodal F16 samples (image probe and smoke24) such a tie flipped twice.
+- **Not covered:** F16 targets on Jetson (they do not fit in 8 GB with mmproj and a drafter) and on the phone.
 
 ## 2. Scope of the measurements
 

@@ -20,7 +20,7 @@ real edge hardware, where the time goes, and what can be changed in the deployme
 | **Four llama.cpp runtime fixes** | C1/C2: CUDA kernel selection for short-K GEMV and Jetson Orin (target-only decode **+15 %** for Q4_K_M models; on current master −1 % to +38 % depending on the quantization type; DSpark +16–30 %). C3: per-token copies after upstream #29622 (desktop +3.5–4.2 %). C4: DSpark Markov chain kept in the draft vocabulary (Jetson +3 %, desktop −8 % → on par). |
 | **Where the time goes** | Per-round breakdowns on all three platforms. On Jetson the Markov head was over half the drafter time, a cost that large-cache hardware hides. On the phone NPU, verifying 2–9 tokens costs about 1.8× a single-token decode, which caps DSpark there at about 1.3×. |
 | **Japanese** | DSpark gives about 70 % of its English gain on Japanese (desktop 1.30× vs 1.80×, Jetson 1.98× vs 2.77×). The cause, measured round by round: the **target's own uncertainty on kanji**, amplified by tokenization (1.5 vs 4.7 characters per token). It is not a weaker drafter, and there is no gap on open-ended text. |
-| **Robustness** | Holds under the model card's sampling settings (1.77× vs 1.80× greedy on desktop, 2.69× vs 2.77× on Jetson, 3 seeds), and in the default power mode. Speculative output differs from greedy only at near-ties, a runtime-numerics effect: F16 targets match exactly except one tie at margin 0.0036, quantized targets diverge only below margin 0.21, and the drafter choice never changes the output. |
+| **Robustness** | Holds under the model card's sampling settings (1.77× vs 1.80× greedy on desktop, 2.69× vs 2.77× on Jetson, 3 seeds), and in the default power mode. The drafter choice never changes the output. Against target-only greedy, outputs differ only at near-ties on the RTX 5070 and Jetson (F16 exact except two ties at margins 0.0036 and 0.0011); on the phone NPU and on the phone CPU with long contexts the S3 criteria are not met, which is traced to the backends' batch-shape numerics (`docs/limitations.md` §1). |
 | **Measurement pitfalls found** | Seven ways the numbers silently go wrong on edge devices, each found, fixed in the harness and documented (§7). Examples: llama-server's 8 GiB prompt cache on an 8 GB board, an orphaned server answering for later configs, OEM CPU caps on Android. |
 
 ## 1. Setup
@@ -293,6 +293,10 @@ Also measured:
   - For a given target and `n_max`, all drafters (including the reduced-vocabulary one) give the same outputs.
   - Changing only the physical batch size, with no speculation, moves next-token logprobs by 0.04–0.06 on CUDA
     with F16 and by up to 2 with quantized weights. This is kernel batch-shape numerics, not a DSpark bug.
+  - The 24-sample multimodal set on all three platforms: RTX 5070 and Jetson pass (one more F16 tie, margin
+    0.0011). On the phone the criteria are not met: the Hexagon NPU diverges at margins up to 0.65 (its logits move
+    by up to 4 with batch size even without speculation), and the CPU at `n_max` 1 diverges on long-context image
+    prompts (its batch-2 path is bit-exact only for short contexts, on ARM and x86 alike).
 - **Sampling** (dev120, speedup vs B0 under the same sampling):
 
   | Platform | greedy | model card (T 0.2, top-k 50; 3 seeds) | T 0.7 |

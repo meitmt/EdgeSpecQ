@@ -9,6 +9,15 @@
    "observed": "token 88: target-only logprobs ' light' -1.2433 vs ' pattern' -1.2470 (margin 0.0036); the speculative runs (F16 and P3-V32k-i32 drafters, n_max 8) chose ' pattern'",
    "explanation": "F16 CUDA kernels are not batch-invariant either: changing only -ub moves top-5 next-token logprobs by 0.037-0.063 (s3_batch_invariance.txt), an order of magnitude above this margin",
    "date": "2026-10-20"
+  },
+  {
+   "group": "rtx5070",
+   "target": "F16",
+   "id": "mmmupro_test_Materials_230",
+   "max_margin": 0.01,
+   "observed": "smoke24, token 198 of 512: target-only logprobs '_E' -0.9549 vs '_A' -0.9560 (margin 0.0011) after 'Force from cable AE: tension T'; the speculative runs (R1: F16 drafter, R11: P3-V32k-i32, n_max 8) chose '_A' and the rest of the step-by-step answer differs",
+   "explanation": "same mechanism as coco_3: a tie far below the F16 CUDA batch-shape logprob drift of 0.037-0.063 (s3_batch_invariance.txt)",
+   "date": "2026-10-20"
   }
  ]
 }

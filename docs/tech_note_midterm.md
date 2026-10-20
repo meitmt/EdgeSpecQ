@@ -153,9 +153,19 @@ For deployment on llama.cpp:
 
 ## 6. Correctness
 
-Speculative greedy output was compared with target-only greedy output on the same target in 30 configurations
-(`limitations.md` §1). With F16 targets all 120 text outputs match exactly; on image prompts 19/20 match, the one
-difference being a tie at a top-1/top-2 margin of 0.0036. Quantized targets diverge only at near-ties (margin
-below 0.21), because llama.cpp's kernels are not batch-invariant. For a given target and draft length, every
-drafter variant, including the reduced-vocabulary one, produces the same output, so the speedups above come with
-no change to what the model says.
+Speculative greedy output was compared with target-only greedy output on the same target on all three platforms
+(`limitations.md` §1): a 30-configuration matrix on the RTX 5070 and the 24-sample multimodal set on each device.
+
+- **For a given target and draft length, every drafter variant, including the reduced-vocabulary one, produces
+  the same output.** The speedups above come with no change to what the model says relative to the official
+  drafter.
+- **Against target-only decoding, outputs can differ at near-ties**, because verification evaluates several tokens
+  at once and llama.cpp's kernels are not batch-invariant. On the RTX 5070 and Jetson every divergence is a
+  near-tie (top-1/top-2 margin below 0.26). F16 targets match exactly except two ties at margins of 0.0036 and
+  0.0011 in 44 multimodal samples.
+- **On the phone the protocol's criteria are not met.**
+  - On the Hexagon NPU, 6 of 24 samples diverge at margins of 0.39–0.65. Changing only the batch size, with no
+    speculation, already moves logprobs by up to 4 and flips top-1 tokens there.
+  - On the CPU at `n_max` 1, long-context (image) prompts diverge where the CPU's batch-2 path stops being
+    bit-exact.
+  - In both cases the speculative output is still the target's own choice, typically its second candidate.

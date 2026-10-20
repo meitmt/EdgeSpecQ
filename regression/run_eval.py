@@ -225,12 +225,14 @@ def mem_state(plat):
         return {}
 
 
-def run_sample(srv, s, sampling, seed, max_tokens):
-    messages, turns, texts = [], [], []
+def run_sample(srv, s, sampling, seed, max_tokens, logprobs=False):
+    messages, turns, texts, toks = [], [], [], []
     for k, text in enumerate(s["turns"]):
         content = [image_part(p) for p in s["images"]] + [{"type": "text", "text": text}] if k == 0 else text
         messages.append({"role": "user", "content": content})
         body = {"messages": messages, "max_tokens": max_tokens, "seed": seed, **sampling}
+        if logprobs:  # top-3 per generated token, for the greedy-equivalence judgment (analysis/judge_greedy.py)
+            body.update({"logprobs": True, "top_logprobs": 3})
         t0 = time.time()
         r = post(body)
         wall = time.time() - t0
@@ -245,8 +247,12 @@ def run_sample(srv, s, sampling, seed, max_tokens):
                       "finish": r["choices"][0].get("finish_reason"),
                       "sha": hashlib.sha256(((msg.get("reasoning_content") or "") + answer).encode()).hexdigest()[:12]})
         texts.append(answer)
+        if logprobs:
+            lp = (r["choices"][0].get("logprobs") or {}).get("content") or []
+            toks.append([[x["token"], x["logprob"], [[y["token"], y["logprob"]] for y in x.get("top_logprobs", [])]]
+                         for x in lp])
         messages.append({"role": "assistant", "content": answer})
-    return turns, texts
+    return turns, texts, toks
 
 
 def main():
@@ -258,6 +264,9 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=512)
     ap.add_argument("--n", type=int, default=0)
     ap.add_argument("--file", default=f"{ROOT}/benchmark/configs.json")
+    ap.add_argument("--logprobs", action="store_true",
+                    help="also record per-token top-3 logprobs (tokens_r<rep>.jsonl) into <config>_lp/, for the S3 "
+                         "greedy-equivalence judgment; timings from such runs are not used")
     a = ap.parse_args()
     spec = json.load(open(a.file))
     plat = spec["platforms"][a.platform]
@@ -269,7 +278,7 @@ def main():
     global PORT
     PORT = int(plat.get("port", PORT))
     set_name = os.path.splitext(os.path.basename(a.set))[0] + (f"_n{a.n}" if a.n else "")
-    suffix = "" if a.sampling == "greedy" else f"_{a.sampling}_s{a.seed}"
+    suffix = ("" if a.sampling == "greedy" else f"_{a.sampling}_s{a.seed}") + ("_lp" if a.logprobs else "")
     # results stay on the machine running this script (for adb platforms "home" is a path on the device)
     base = f"{expand(plat.get('log_home', plat['home']))}/logs/eval/{a.platform}/{set_name}"
 
@@ -311,7 +320,7 @@ def main():
                     while queue:
                         s = queue[0]
                         try:
-                            turns, texts = run_sample(srv, s, sampling, a.seed, a.max_tokens)
+                            turns, texts, toks = run_sample(srv, s, sampling, a.seed, a.max_tokens, a.logprobs)
                         except (OSError, http.client.HTTPException) as e:  # server died mid-request
                             attempts[s["id"]] = attempts.get(s["id"], 0) + 1
                             with open(f"{outdir}/crashes_r{rep}.jsonl", "a") as f:
@@ -328,6 +337,9 @@ def main():
                             f.write(json.dumps({"id": s["id"], "src": s["src"], "turns": turns, **st}) + "\n")
                         with open(f"{outdir}/outputs_r{rep}.jsonl", "a") as f:
                             f.write(json.dumps({"id": s["id"], "texts": texts}, ensure_ascii=False) + "\n")
+                        if a.logprobs:
+                            with open(f"{outdir}/tokens_r{rep}.jsonl", "a") as f:
+                                f.write(json.dumps({"id": s["id"], "turns": toks}, ensure_ascii=False) + "\n")
                         # thermal guard (phones): pause between samples while the device is too hot
                         guard = (cool or {}).get("pause_above_c")
                         if guard and (st.get("battery_temp_c") or 0) > guard:

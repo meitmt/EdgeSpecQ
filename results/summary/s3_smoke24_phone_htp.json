@@ -1,0 +1,187 @@
+{
+ "source": "eval phone_htp smoke24 B0,B1,B2,B11",
+ "runtime": "",
+ "margin_threshold": 0.3,
+ "exceptions_file": "results/summary/s3_known_exceptions.json",
+ "runs": [
+  {
+   "group": "phone_htp",
+   "config": "B1",
+   "reference": "B0",
+   "target": "Q4_K_M",
+   "drafter": "F16",
+   "runtime": "edge",
+   "n_max": 8,
+   "criterion": "near-tie (margin < 0.3)",
+   "prompts": 24,
+   "identical": 7,
+   "near_tie": 11,
+   "large_margin": 6,
+   "unlocated": 0,
+   "missing": 0,
+   "margin_median": 0.25218576192855835,
+   "margin_max": 0.6501712203025818,
+   "pass": false,
+   "strict_pass": false,
+   "failures": [
+    [
+     "textvqa_38297",
+     "large_margin",
+     0.38544654846191406,
+     45
+    ],
+    [
+     "coco_000000309391",
+     "large_margin",
+     0.5582867860794067,
+     15
+    ],
+    [
+     "coco_000000293794",
+     "large_margin",
+     0.44547462463378906,
+     19
+    ],
+    [
+     "charxiv_101",
+     "large_margin",
+     0.6501712203025818,
+     44
+    ],
+    [
+     "mmmtbench_24",
+     "large_margin",
+     0.5286102890968323,
+     1
+    ],
+    [
+     "mmmtbench_14",
+     "large_margin",
+     0.6355514526367188,
+     3
+    ]
+   ],
+   "known_exceptions": []
+  },
+  {
+   "group": "phone_htp",
+   "config": "B2",
+   "reference": "B0",
+   "target": "Q4_K_M",
+   "drafter": "Q8_0",
+   "runtime": "edge",
+   "n_max": 8,
+   "criterion": "near-tie (margin < 0.3)",
+   "prompts": 24,
+   "identical": 7,
+   "near_tie": 11,
+   "large_margin": 6,
+   "unlocated": 0,
+   "missing": 0,
+   "margin_median": 0.25218576192855835,
+   "margin_max": 0.6501712203025818,
+   "pass": false,
+   "strict_pass": false,
+   "failures": [
+    [
+     "textvqa_38297",
+     "large_margin",
+     0.38544654846191406,
+     45
+    ],
+    [
+     "coco_000000309391",
+     "large_margin",
+     0.5582867860794067,
+     15
+    ],
+    [
+     "coco_000000293794",
+     "large_margin",
+     0.44547462463378906,
+     19
+    ],
+    [
+     "charxiv_101",
+     "large_margin",
+     0.6501712203025818,
+     44
+    ],
+    [
+     "mmmtbench_24",
+     "large_margin",
+     0.5286102890968323,
+     1
+    ],
+    [
+     "mmmtbench_14",
+     "large_margin",
+     0.6355514526367188,
+     3
+    ]
+   ],
+   "known_exceptions": []
+  },
+  {
+   "group": "phone_htp",
+   "config": "B11",
+   "reference": "B0",
+   "target": "Q4_K_M",
+   "drafter": "P3-V32k-i32",
+   "runtime": "edge",
+   "n_max": 8,
+   "criterion": "near-tie (margin < 0.3)",
+   "prompts": 24,
+   "identical": 7,
+   "near_tie": 11,
+   "large_margin": 6,
+   "unlocated": 0,
+   "missing": 0,
+   "margin_median": 0.25218576192855835,
+   "margin_max": 0.6501712203025818,
+   "pass": false,
+   "strict_pass": false,
+   "failures": [
+    [
+     "textvqa_38297",
+     "large_margin",
+     0.38544654846191406,
+     45
+    ],
+    [
+     "coco_000000309391",
+     "large_margin",
+     0.5582867860794067,
+     15
+    ],
+    [
+     "coco_000000293794",
+     "large_margin",
+     0.44547462463378906,
+     19
+    ],
+    [
+     "charxiv_101",
+     "large_margin",
+     0.6501712203025818,
+     44
+    ],
+    [
+     "mmmtbench_24",
+     "large_margin",
+     0.5286102890968323,
+     1
+    ],
+    [
+     "mmmtbench_14",
+     "large_margin",
+     0.6355514526367188,
+     3
+    ]
+   ],
+   "known_exceptions": []
+  }
+ ],
+ "pass": false,
+ "strict_pass": false
+}

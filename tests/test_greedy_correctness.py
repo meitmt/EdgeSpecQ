@@ -53,6 +53,15 @@ class JudgeLogic(unittest.TestCase):
         r = jg.judge_pair(self.ref, ({}, {}), exact=False)
         self.assertFalse(r["pass"]); self.assertEqual(r["missing"], 1)
 
+    def test_turns_ending_at_different_places_fail(self):
+        # two-turn sample joined the way load_eval_run joins it: the reference ends turn 1 one token earlier
+        T = jg.TURN
+        ref = ({"p": "a\n<<turn>>\nc"}, {"p": [tok("a", ("a", -0.1), ("b", -2.0)), T, tok("c", ("c", -0.1))]})
+        spec = ({"p": "a b\n<<turn>>\nc"}, {"p": [tok("a", ("a", -0.1)), tok(" b", (" b", -0.1)), T,
+                                                   tok("c", ("c", -0.1))]})
+        r = jg.judge_pair(ref, spec, exact=False)
+        self.assertFalse(r["pass"]); self.assertEqual(r["unlocated"], 1)
+
     def test_criteria(self):
         self.assertTrue(jg.criterion("s3", "F16", 8).startswith("exact"))
         self.assertTrue(jg.criterion("s3cpu", "Q4_K_M", 1).startswith("exact"))

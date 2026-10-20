@@ -1,0 +1,9 @@
+# batch_invariance.py --platform, OnePlus 13, edge runtime, 2026-10-20
+platform=phone_htp config=B0  (10 prompts, reference ub=1)
+  ub=  2: bit-identical top-5 on 0/10 prompts; max |dlogprob| 2.60375; top-1 flips 3
+  ub=  9: bit-identical top-5 on 0/10 prompts; max |dlogprob| 4.15680; top-1 flips 2
+  ub=512: bit-identical top-5 on 0/10 prompts; max |dlogprob| 4.30978; top-1 flips 1
+platform=phone config=B0  (10 prompts, reference ub=1)
+  ub=  2: bit-identical top-5 on 10/10 prompts; max |dlogprob| 0.00000; top-1 flips 0
+  ub=  9: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.82205; top-1 flips 0
+  ub=512: bit-identical top-5 on 0/10 prompts; max |dlogprob| 1.21615; top-1 flips 1

@@ -13,11 +13,17 @@ Divergences that break an exact criterion but were investigated are listed in a 
 (results/summary/s3_known_exceptions.json); an entry is honoured only while the divergence is a near-tie below its
 max_margin. Such runs are reported as passing with a known exception, never as strictly identical.
 
-Runs come from scripts/run_s3.sh: $EDGESPECQ_HOME/logs/probe/<group>__<target>__none for the reference and
-<group>__<target>__<drafter>__n<n_max> for the speculative runs, where <group> starts with the tag and a group
-containing "cpu" is the CPU control.
+Two sources of runs:
+  probe mode   scripts/run_s3.sh: $EDGESPECQ_HOME/logs/probe/<group>__<target>__none for the reference and
+               <group>__<target>__<drafter>__n<n_max> for the speculative runs, where <group> starts with the tag
+               and a group containing "cpu" is the CPU control.
+  eval mode    regression/run_eval.py --logprobs on an evaluation set (e.g. smoke24), any platform:
+               <log home>/logs/eval/<platform>/<set>/<config>_lp/{outputs,tokens}_r1.jsonl. Each speculative
+               config is paired with the config in the list that has the same target and runtime and no drafter;
+               multi-turn samples are compared over all turns in order (a turn ending at a different place fails).
 
 usage: judge_greedy.py <tag> [--json out.json] [--runtime "description"] [--exceptions file.json]
+       judge_greedy.py --eval <platform> <set> <config,config,...> [--log-home DIR] [--json out.json]
 exit status 1 if any run fails
 """
 import argparse, glob, json, os, statistics, sys
@@ -82,16 +88,51 @@ def judge_pair(ref, spec, exact, exceptions=()):
             "failures": failures, "known_exceptions": known}
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("tag"); ap.add_argument("--json"); ap.add_argument("--runtime", default="")
-    ap.add_argument("--exceptions", default=f"{ROOT}/results/summary/s3_known_exceptions.json")
-    a = ap.parse_args()
-    exc = json.load(open(a.exceptions))["exceptions"] if a.exceptions and os.path.exists(a.exceptions) else []
+TURN = ["<<turn>>", 0.0, []]  # separator between turns: a divergence there cannot be located, so it fails
+
+
+def load_eval_run(path):
+    """run_eval.py --logprobs output -> (texts, toks) with the turns of each sample joined in order."""
+    texts = {r["id"]: "\n<<turn>>\n".join(r["texts"])
+             for r in map(json.loads, open(f"{path}/outputs_r1.jsonl", encoding="utf-8"))}
+    toks = {}
+    for r in map(json.loads, open(f"{path}/tokens_r1.jsonl", encoding="utf-8")):
+        seq = []
+        for k, t in enumerate(r["turns"]):
+            seq += ([TURN] if k else []) + t
+        toks[r["id"]] = seq
+    return texts, toks
+
+
+def eval_runs(platform, set_name, names, log_home, exc):
+    spec = json.load(open(f"{ROOT}/benchmark/configs.json"))
+    plat = spec["platforms"][platform]
+    cfgs = {n: spec["configs"][n] for n in names}
+    home = os.path.expanduser(log_home or plat.get("log_home", plat["home"]))
+    base = f"{home}/logs/eval/{platform}/{set_name}"
+    group = platform + ("-cpu" if str(plat.get("ngl", 99)) == "0" else "")
+    runs = []
+    for n, c in cfgs.items():
+        if not c.get("draft"):
+            continue
+        refs = [m for m, d in cfgs.items() if not d.get("draft") and d["target"] == c["target"]
+                and d["runtime"] == c["runtime"]]
+        if not refs:
+            print(f"no reference for {n}", file=sys.stderr); continue
+        n_max = c.get("n_max") or plat["n_max"]
+        crit = criterion(group, c["target"], n_max)
+        mine = {e["id"]: e["max_margin"] for e in exc if e["group"] == group and e["target"] == c["target"]}
+        r = judge_pair(load_eval_run(f"{base}/{refs[0]}_lp"), load_eval_run(f"{base}/{n}_lp"),
+                       exact=crit.startswith("exact"), exceptions=mine)
+        runs.append({"group": group, "config": n, "reference": refs[0], "target": c["target"], "drafter": c["draft"],
+                     "runtime": c["runtime"], "n_max": n_max, "criterion": crit, **r})
+    return runs
+
+
+def probe_runs(tag, exc):
     base = f"{HOME}/logs/probe"
-    report = {"tag": a.tag, "runtime": a.runtime, "margin_threshold": MARGIN,
-              "exceptions_file": os.path.relpath(a.exceptions, ROOT) if exc else None, "runs": []}
-    for path in sorted(glob.glob(f"{base}/{a.tag}*__*__*__n*")):
+    runs = []
+    for path in sorted(glob.glob(f"{base}/{tag}*__*__*__n*")):
         group, target, drafter, n = os.path.basename(path).split("__")
         n_max = int(n[1:])
         ref_path = f"{base}/{group}__{target}__none"
@@ -100,17 +141,33 @@ def main():
         crit = criterion(group, target, n_max)
         mine = {e["id"]: e["max_margin"] for e in exc if e["group"] == group and e["target"] == target}
         r = judge_pair(load_run(ref_path), load_run(path), exact=crit.startswith("exact"), exceptions=mine)
-        report["runs"].append({"group": group, "target": target, "drafter": drafter, "n_max": n_max,
-                               "criterion": crit, **r})
+        runs.append({"group": group, "target": target, "drafter": drafter, "n_max": n_max, "criterion": crit, **r})
+    return runs
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("tag", nargs="?"); ap.add_argument("--json"); ap.add_argument("--runtime", default="")
+    ap.add_argument("--eval", nargs=3, metavar=("PLATFORM", "SET", "CONFIGS"))
+    ap.add_argument("--log-home")
+    ap.add_argument("--exceptions", default=f"{ROOT}/results/summary/s3_known_exceptions.json")
+    a = ap.parse_args()
+    exc = json.load(open(a.exceptions))["exceptions"] if a.exceptions and os.path.exists(a.exceptions) else []
+    report = {"source": "eval " + " ".join(a.eval) if a.eval else f"probe {a.tag}", "runtime": a.runtime,
+              "margin_threshold": MARGIN, "exceptions_file": os.path.relpath(a.exceptions, ROOT) if exc else None}
+    if a.eval:
+        report["runs"] = eval_runs(a.eval[0], a.eval[1], a.eval[2].split(","), a.log_home, exc)
+    else:
+        report["runs"] = probe_runs(a.tag, exc)
     runs = report["runs"]
     report["pass"] = bool(runs) and all(r["pass"] for r in runs)
     report["strict_pass"] = bool(runs) and all(r["strict_pass"] for r in runs)
-    print(f"{'group':8s} {'target':7s} {'drafter':12s} {'n':>2s} {'same':>5s} {'tie':>4s} {'big':>4s} {'unl':>4s}"
+    print(f"{'group':10s} {'target':7s} {'drafter':12s} {'n':>2s} {'same':>5s} {'tie':>4s} {'big':>4s} {'unl':>4s}"
           f" {'margin med/max':>15s}  verdict")
     for r in runs:
         mm = "-" if r["margin_max"] is None else f"{r['margin_median']:.3f}/{r['margin_max']:.3f}"
         v = "PASS" if r["strict_pass"] else ("PASS, known exception" if r["pass"] else "FAIL")
-        print(f"{r['group']:8s} {r['target']:7s} {r['drafter']:12s} {r['n_max']:2d} {r['identical']:3d}/{r['prompts']:<2d}"
+        print(f"{r['group']:10s} {r['target']:7s} {r['drafter']:12s} {r['n_max']:2d} {r['identical']:3d}/{r['prompts']:<2d}"
               f"{r['near_tie']:4d} {r['large_margin']:4d} {r['unlocated']:4d} {mm:>15s}  {v} ({r['criterion']})")
         for tag, items in (("known exception", r["known_exceptions"]), ("FAIL", r["failures"])):
             for i, c, m, k in items:

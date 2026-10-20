@@ -92,6 +92,8 @@
     "B11c": {"target": "Q4_K_M", "draft": "P3-V32k-i32", "runtime": "edge", "device_draft": "CPU", "_doc": "phone: target on HTP0, drafter on the CPU"},
     "R0":  {"target": "F16",    "draft": null,          "runtime": "edge"},
     "R1":  {"target": "F16",    "draft": "F16",         "runtime": "edge"},
+    "R11": {"target": "F16",    "draft": "P3-V32k-i32", "runtime": "edge", "_doc": "S3: F16 target with the B11 drafter"},
+    "B1n1": {"target": "Q4_K_M", "draft": "F16",        "runtime": "edge", "n_max": 1, "_doc": "S3 CPU control: n_max 1"},
 
     "A0":  {"target": "Q4_K_M", "draft": null,          "runtime": "master"},
     "A1":  {"target": "Q4_K_M", "draft": "F16",         "runtime": "master", "n_max": 8},
