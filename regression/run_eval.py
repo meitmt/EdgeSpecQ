@@ -12,7 +12,7 @@ results stay on the host, talking to the server through `adb forward`.
 Repetitions rotate the config order so slow drift does not favour one config.
 
 usage: run_eval.py <platform> <set.jsonl> <config,config,...> [--reps 1] [--sampling greedy] [--seed 0]
-                   [--max-tokens 512] [--n N]   (N: evenly subsample the set, for smoke runs)
+                   [--max-tokens 512] [--n N] [--tag T]   (N: evenly subsample the set, for smoke runs)
 """
 import argparse, base64, hashlib, http.client, json, os, re, shlex, socket, subprocess, time, urllib.request
 
@@ -47,10 +47,16 @@ def image_part(path):
     return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
 
 
+def adb_cmd(plat):
+    """adb executable plus the device selection: the platform's "serial" if set, otherwise adb's own default
+    ($ANDROID_SERIAL, or the only connected device)."""
+    a = plat["adb"]
+    return [a["exe"], *(["-s", a["serial"]] if a.get("serial") else [])]
+
+
 def adb(plat, *args, **kw):
     """Run an adb command for a remote (Android) platform; returns stdout."""
-    a = plat["adb"]
-    return subprocess.run([a["exe"], "-s", a["serial"], *args], capture_output=True, text=True, **kw).stdout
+    return subprocess.run([*adb_cmd(plat), *args], capture_output=True, text=True, **kw).stdout
 
 
 class Server:
@@ -90,7 +96,7 @@ class Server:
         if self.remote:
             self.env = {"LD_LIBRARY_PATH": libs, **extra}
             envs = " ".join(f"{k}={shlex.quote(v)}" for k, v in self.env.items())
-            self.cmd = [plat["adb"]["exe"], "-s", plat["adb"]["serial"], "shell",
+            self.cmd = [*adb_cmd(plat), "shell",
                         f"cd {home} && {envs} exec " + " ".join(shlex.quote(x) for x in self.args)]
         else:
             self.env = {**os.environ, **extra, "LD_LIBRARY_PATH": libs + ":" + os.environ.get("LD_LIBRARY_PATH", "")}
@@ -108,7 +114,7 @@ class Server:
         envs = " ".join(f"{k}={shlex.quote(v)}" for k, v in self.env.items())
         home = self.plat["home"]
         with open(log, "w") as f:
-            p = subprocess.Popen([*self.cmd[:4], f"cd {home} && {envs} exec " + " ".join(shlex.quote(x) for x in args)],
+            p = subprocess.Popen([*adb_cmd(self.plat), "shell", f"cd {home} && {envs} exec " + " ".join(shlex.quote(x) for x in args)],
                                  stdout=f, stderr=subprocess.STDOUT)
             for _ in range(180):
                 time.sleep(1)
@@ -267,6 +273,8 @@ def main():
     ap.add_argument("--logprobs", action="store_true",
                     help="also record per-token top-3 logprobs (tokens_r<rep>.jsonl) into <config>_lp/, for the S3 "
                          "greedy-equivalence judgment; timings from such runs are not used")
+    ap.add_argument("--tag", help="write to <set>_<tag>/ instead of <set>/, e.g. a reproduction kept apart from the "
+                                  "published runs")
     a = ap.parse_args()
     spec = json.load(open(a.file))
     plat = spec["platforms"][a.platform]
@@ -277,7 +285,8 @@ def main():
         samples = samples[::max(1, len(samples) // a.n)][:a.n]
     global PORT
     PORT = int(plat.get("port", PORT))
-    set_name = os.path.splitext(os.path.basename(a.set))[0] + (f"_n{a.n}" if a.n else "")
+    set_name = os.path.splitext(os.path.basename(a.set))[0] + (f"_n{a.n}" if a.n else "") + \
+        (f"_{a.tag}" if a.tag else "")
     suffix = ("" if a.sampling == "greedy" else f"_{a.sampling}_s{a.seed}") + ("_lp" if a.logprobs else "")
     # results stay on the machine running this script (for adb platforms "home" is a path on the device)
     base = f"{expand(plat.get('log_home', plat['home']))}/logs/eval/{a.platform}/{set_name}"

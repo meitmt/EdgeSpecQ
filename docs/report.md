@@ -394,6 +394,19 @@ from WSL.
 
 ### R5. Measurements
 
+The main experiment (A0, A1, B0, B11) runs with one command per device, after checking the llama.cpp commit, the
+runtime libraries, the model SHA256 and the evaluation-set manifest, and ends with a comparison against the
+published numbers (`analysis/compare_repro.py`):
+
+```bash
+bash scripts/run_benchmark.sh --platform rtx5070 [--set smoke24]     # or --platform jetson / jetson_25w on the Jetson
+```
+
+Checked on 2026-10-21 with smoke24 on both devices (against the published dev120 runs restricted to the smoke24
+samples, `results/summary/repro_ref/`): on the Jetson every decode rate and speedup within 0.1 %, on the RTX 5070
+within 4 % (B11 3.9 % slower; the desktop's clocks are not locked).
+The full matrix:
+
 ```bash
 E=$H/eval; RUN="$H/.venv/bin/python regression/run_eval.py"     # resumable: rerun the same command to continue
 # Desktop
@@ -415,8 +428,8 @@ Each sample is written to `logs/eval/<platform>/<set>/<config>[_<sampling>_s<see
 the server log, the exact command line and the memory, swap and battery-temperature counters.
 
 `scripts/jetson_measure.sh` stops the desktop, sets MAXN_SUPER and `jetson_clocks`, runs the command, and always
-restores the previous mode, clocks and systemd target. It was adapted from the run scripts used for the measurements
-and has not been run in this form.
+restores the previous mode, clocks and systemd target. It was adapted from the run scripts used for the measurements;
+in this form it ran the 2026-10-21 smoke24 reproduction above.
 
 ### R6. Summaries
 
@@ -454,6 +467,7 @@ probabilities do not depend on kernel selection, apart from near-tie numerics.
 | Path | Contents |
 |---|---|
 | `benchmark/` | evaluation-set builders, `configs.json` (platforms, sampling presets, configs), `manifests/` (sample IDs, model SHA256) |
+| `scripts/run_benchmark.sh`, `analysis/compare_repro.py` | one-command main experiment with pre-run checks, and comparison with the published numbers |
 | `regression/run_eval.py` | resumable multi-turn harness (local and adb), placement probe, thermal and port guards |
 | `quantization/` | GGUF inspector, reduced-vocabulary exporter, committed vocabulary counts |
 | `runtime/llama_cpp_patches/` | C1/C2 (`e8-shortk-igpu`), C3 (`0001-…`), C4 (`e9-c4-draft-space`), timing and round-log patches |

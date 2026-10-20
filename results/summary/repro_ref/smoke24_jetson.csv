@@ -1,0 +1,5 @@
+platform,set,config,reps,n,tps,speedup,ci_lo,ci_hi,mean_len,accept,speedup_captioning,speedup_chart_vqa,speedup_general_vqa,speedup_multi_turn,speedup_reasoning,speedup_text_vqa
+jetson,dev120,A0,2,24,27.15,1.0,1.0,1.0,nan,,1.0,1.0,1.0,1.0,1.0,1.0
+jetson,dev120,A1,2,24,49.5,1.8233,1.6308,2.0178,4.252,0.3778,1.7843,1.9909,1.5067,1.776,2.1355,1.3563
+jetson,dev120,B0,2,24,31.28,1.1522,1.1516,1.1527,nan,,1.1535,1.151,1.1519,1.1512,1.1525,1.1519
+jetson,dev120,B11,2,24,86.78,3.1966,2.9274,3.4369,3.644,0.4231,3.3205,3.395,2.5417,3.0564,3.5839,2.4797

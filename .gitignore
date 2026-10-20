@@ -7,6 +7,7 @@ datasets/
 
 # Raw run outputs and profiler dumps (summaries/figures are committed explicitly)
 results/raw/
+results/repro/
 *.nsys-rep
 *.qdrep
 *.sqlite

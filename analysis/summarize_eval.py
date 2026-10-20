@@ -4,7 +4,9 @@ turns), mean accepted length, acceptance, and the paired decode speedup over a r
 bootstrap interval over samples (samples resampled within the set; per sample, tokens and decode time come from the
 repetition with the median decode time).
 
-usage: summarize_eval.py <platform> <set> [--ref B0] [--configs B1,B2,...] [--csv out.csv]
+usage: summarize_eval.py <platform> <set> [--ref B0] [--configs B1,B2,...] [--ids manifest.tsv] [--csv out.csv]
+  --ids: only the samples listed in a manifest (benchmark/manifests/*.tsv, ID in column 2), e.g. the smoke24
+         subset of a dev120 run
 """
 import argparse, csv, glob, json, os, random, statistics
 from collections import defaultdict
@@ -48,11 +50,15 @@ def main():
     ap.add_argument("--ref", default="B0")
     ap.add_argument("--configs")
     ap.add_argument("--csv")
+    ap.add_argument("--ids")
     ap.add_argument("--boot", type=int, default=2000)
     a = ap.parse_args()
     base = os.path.expanduser(f"{HOME[a.platform]}/logs/eval/{a.platform}/{a.set}")
     cfgs = a.configs.split(",") if a.configs else sorted(d for d in os.listdir(base) if os.path.isdir(f"{base}/{d}"))
+    keep = {l.split("\t")[1] for l in open(a.ids) if l.strip()} if a.ids else None
     ref = per_sample(load(base, a.ref))
+    if keep is not None:
+        ref = {i: v for i, v in ref.items() if i in keep}
     cats = sorted({v[0] for v in ref.values()})
     rows = []
     hdr = f"{'config':8s} {'reps':>4s} {'n':>4s} {'t/s':>7s} {'speedup [95% CI]':>22s} {'len':>5s} {'acc':>5s} | " + \
