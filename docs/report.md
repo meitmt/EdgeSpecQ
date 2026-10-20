@@ -20,7 +20,7 @@ real edge hardware, where the time goes, and what can be changed in the deployme
 | **Four llama.cpp runtime fixes** | C1/C2: CUDA kernel selection for short-K GEMV and Jetson Orin (target-only decode **+15 %** for Q4_K_M models; on current master −1 % to +38 % depending on the quantization type; DSpark +16–30 %). C3: per-token copies after upstream #29622 (desktop +3.5–4.2 %). C4: DSpark Markov chain kept in the draft vocabulary (Jetson +3 %, desktop −8 % → on par). |
 | **Where the time goes** | Per-round breakdowns on all three platforms. On Jetson the Markov head was over half the drafter time, a cost that large-cache hardware hides. On the phone NPU, verifying 2–9 tokens costs about 1.8× a single-token decode, which caps DSpark there at about 1.3×. |
 | **Japanese** | DSpark gives about 70 % of its English gain on Japanese (desktop 1.30× vs 1.80×, Jetson 1.98× vs 2.77×). The cause, measured round by round: the **target's own uncertainty on kanji**, amplified by tokenization (1.5 vs 4.7 characters per token). It is not a weaker drafter, and there is no gap on open-ended text. |
-| **Robustness** | Holds under the model card's sampling settings (1.77× vs 1.80× greedy on desktop, 2.69× vs 2.77× on Jetson, 3 seeds), and in the default power mode. Speculative output with quantized targets differs from greedy only at near-ties, a runtime-numerics effect; F16 targets match exactly. |
+| **Robustness** | Holds under the model card's sampling settings (1.77× vs 1.80× greedy on desktop, 2.69× vs 2.77× on Jetson, 3 seeds), and in the default power mode. Speculative output differs from greedy only at near-ties, a runtime-numerics effect: F16 targets match exactly except one tie at margin 0.0036, quantized targets diverge only below margin 0.21, and the drafter choice never changes the output. |
 | **Measurement pitfalls found** | Seven ways the numbers silently go wrong on edge devices, each found, fixed in the harness and documented (§7). Examples: llama-server's 8 GiB prompt cache on an 8 GB board, an orphaned server answering for later configs, OEM CPU caps on Android. |
 
 ## 1. Setup
@@ -284,10 +284,15 @@ rerun, and the harness now guards against it.
 | Short answers | Japanese and MMMU-Pro prompts produced 4-token answers, so decode speed was unmeasurable | Instruction placement fixed: MMMU-Pro step-by-step suffix, ja75 "answer in detail" |
 
 Also measured:
-- **Greedy equivalence.** With F16 targets, speculative output matches target-only greedy exactly (20/20 at every
-  `n_max`). With quantized targets it diverges only at near-ties (median top-1/top-2 margin 0.02–0.06). Changing
-  only the physical batch size, with no speculation, moves next-token logprobs by up to 0.6 on CUDA. This is
-  kernel batch-shape numerics, not a DSpark bug.
+- **Greedy equivalence (S3, `docs/limitations.md` §1).** 30 speculative runs on the RTX 5070 (4 target precisions
+  × 3 drafters × `n_max` 1/8, plus image prompts and a CPU control), judged by `analysis/judge_greedy.py`:
+  - F16 targets match target-only greedy exactly on all 120 text outputs. On the image probe 19/20 match; the one
+    divergence is a tie at margin 0.0036, recorded as a known exception.
+  - Quantized targets diverge only at near-ties (median top-1/top-2 margin 0.02–0.06, max 0.20).
+  - The CPU control with `n_max` 1 is identical.
+  - For a given target and `n_max`, all drafters (including the reduced-vocabulary one) give the same outputs.
+  - Changing only the physical batch size, with no speculation, moves next-token logprobs by 0.04–0.06 on CUDA
+    with F16 and by up to 2 with quantized weights. This is kernel batch-shape numerics, not a DSpark bug.
 - **Sampling** (dev120, speedup vs B0 under the same sampling):
 
   | Platform | greedy | model card (T 0.2, top-k 50; 3 seeds) | T 0.7 |

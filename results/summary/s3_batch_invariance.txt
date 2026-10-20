@@ -1,0 +1,21 @@
+# batch_invariance.py on 620d2225c + edge patches, RTX 5070 / CPU, 2026-10-20
+target=LFM2.5-VL-3B-F16.gguf ngl=99  (10 prompts, reference ub=1)
+  ub=  2: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.03714; top-1 flips 0
+  ub=  9: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.04592; top-1 flips 0
+  ub=512: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.06307; top-1 flips 0
+target=LFM2.5-VL-3B-Q8_0.gguf ngl=99  (10 prompts, reference ub=1)
+  ub=  2: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.48511; top-1 flips 0
+  ub=  9: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.29241; top-1 flips 0
+  ub=512: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.32160; top-1 flips 0
+target=LFM2.5-VL-3B-Q4_K_M.gguf ngl=99  (10 prompts, reference ub=1)
+  ub=  2: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.21767; top-1 flips 0
+  ub=  9: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.29233; top-1 flips 0
+  ub=512: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.58465; top-1 flips 0
+target=LFM2.5-VL-3B-Q4_0.gguf ngl=99  (10 prompts, reference ub=1)
+  ub=  2: bit-identical top-5 on 0/10 prompts; max |dlogprob| 1.91278; top-1 flips 0
+  ub=  9: bit-identical top-5 on 0/10 prompts; max |dlogprob| 2.05282; top-1 flips 0
+  ub=512: bit-identical top-5 on 0/10 prompts; max |dlogprob| 1.48706; top-1 flips 0
+target=LFM2.5-VL-3B-Q4_K_M.gguf ngl=0  (10 prompts, reference ub=1)
+  ub=  2: bit-identical top-5 on 10/10 prompts; max |dlogprob| 0.00000; top-1 flips 0
+  ub=  9: bit-identical top-5 on 0/10 prompts; max |dlogprob| 0.33735; top-1 flips 0
+  ub=512: bit-identical top-5 on 0/10 prompts; max |dlogprob| 1.23226; top-1 flips 0

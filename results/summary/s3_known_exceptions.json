@@ -1,0 +1,14 @@
+{
+ "_doc": "Divergences that break an exact criterion of S3 (proj v1.11 §4.5) but were investigated and documented (docs/limitations.md §1). judge_greedy.py accepts an entry only while the divergence stays a near-tie below max_margin, so a later, larger divergence on the same prompt still fails.",
+ "exceptions": [
+  {
+   "group": "s3vl",
+   "target": "F16",
+   "id": "coco_3",
+   "max_margin": 0.01,
+   "observed": "token 88: target-only logprobs ' light' -1.2433 vs ' pattern' -1.2470 (margin 0.0036); the speculative runs (F16 and P3-V32k-i32 drafters, n_max 8) chose ' pattern'",
+   "explanation": "F16 CUDA kernels are not batch-invariant either: changing only -ub moves top-5 next-token logprobs by 0.037-0.063 (s3_batch_invariance.txt), an order of magnitude above this margin",
+   "date": "2026-10-20"
+  }
+ ]
+}

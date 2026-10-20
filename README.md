@@ -41,6 +41,8 @@ reduced-vocabulary drafter (no retraining, identical outputs) plus four llama.cp
 | `scripts/build_runtimes.sh`, `scripts/build_android.sh`, `scripts/build_android_htp.sh` | master / fixed / edge runtimes for CUDA, Android CPU and Hexagon NPU |
 | `scripts/jetson_measure.sh` | Run a command on the Jetson with the desktop stopped and MAXN_SUPER, restoring everything afterwards |
 | `analysis/e8_breakdown.py`, `analysis/e9_lang_rounds.py`, `analysis/e9_lang_analyze.py` | Per-round time breakdown (local and adb); Japanese acceptance root-cause analysis |
+| `scripts/run_s3.sh`, `analysis/judge_greedy.py`, `tests/test_greedy_correctness.py` | Greedy-equivalence matrix, its judgment and tests; criteria, results and limits in [`docs/limitations.md`](docs/limitations.md) |
+| `analysis/make_figures.py` | All figures in `results/figures/` (light and dark) from `results/summary/` |
 
 ## Setup (WSL2 / Linux, CUDA)
 
