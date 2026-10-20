@@ -1,0 +1,9 @@
+step,label,jetson_speedup,rtx5070_speedup
+A0,Target only,1.0,1.0
+A1,+ F16 drafter,1.858,1.497
+A2,+ C1–C3,1.86,1.521
+A3,Q8_0 drafter,2.67,1.808
+A4,P3 drafter,2.812,1.821
+A5,n_max per device,2.976,1.876
+A6,32k vocab,3.106,1.717
+A7,+ C4,3.197,1.862

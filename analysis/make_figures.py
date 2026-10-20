@@ -8,7 +8,7 @@
   fig5_ja_confidence     Japanese captioning: per-character-class acceptance vs the target's own confidence
 
 Each figure is written as SVG and PNG (2x) in a light and a dark variant, plus the plotted numbers as CSV
-(results/figures/data/), which is the table view of every chart.
+(results/figures/tables/), which is the table view of every chart.
 
 usage: make_figures.py [--out results/figures]
 """
@@ -41,8 +41,8 @@ def read_csv(name):
 
 
 def write_rows(out, name, header, rows):
-    os.makedirs(f"{out}/data", exist_ok=True)
-    with open(f"{out}/data/{name}.csv", "w", newline="") as f:
+    os.makedirs(f"{out}/tables", exist_ok=True)
+    with open(f"{out}/tables/{name}.csv", "w", newline="") as f:
         w = csv.writer(f); w.writerow(header); w.writerows(rows)
 
 

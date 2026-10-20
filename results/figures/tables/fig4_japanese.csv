@@ -1,0 +1,9 @@
+platform,config,english_speedup,japanese_speedup
+RTX 5070,B1,1.517,0.997
+RTX 5070,B2,1.775,1.191
+RTX 5070,B11,1.796,1.304
+RTX 5070,B12,1.634,1.303
+Jetson Orin Nano Super (MAXN),B1,1.799,1.206
+Jetson Orin Nano Super (MAXN),B2,2.522,1.696
+Jetson Orin Nano Super (MAXN),B11,2.774,1.98
+Jetson Orin Nano Super (MAXN),B12,2.585,2.023

@@ -1,0 +1,7 @@
+config,Draft ms,Verify ms,Inject ms,Sampling and other ms,total ms,tokens/round
+RTX 5070 · F16 drafter,5.24,7.66,0.93,0.64,14.47,3.62
+RTX 5070 · Q8_0 drafter,3.54,7.55,0.75,0.63,12.46,3.6
+Jetson · F16 drafter,41.54,40.22,2.18,0.98,84.92,3.49
+Jetson · Q8_0 drafter,25.34,39.56,1.32,0.96,67.18,3.5
+"Jetson · P3-V32k, fixes + C4, n_max 6",6.35,33.81,1.28,0.95,42.39,3.5
+Phone NPU · P3-V32k + C4,31.71,71.11,3.44,2.76,109.02,4.06

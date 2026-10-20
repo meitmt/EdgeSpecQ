@@ -1,0 +1,6 @@
+class,target_top1,acceptance,drafted_positions
+Kanji,0.569,0.6,658
+Hiragana,0.73,0.763,638
+Katakana,0.763,0.738,187
+Japanese punctuation,0.792,0.916,190
+English words,0.688,0.771,2111

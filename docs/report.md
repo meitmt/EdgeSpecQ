@@ -434,7 +434,7 @@ machine that holds the logs (`HOME` map in `summarize_eval.py`).
 | Japanese root cause (§6.2) | timing tree + `e9-server-round-log.patch` (llama-server) | `python analysis/e9_lang_rounds.py <timing_dir> <target> <Q8_0 drafter> rounds_q8.jsonl` and the same with drafter `none` → `target_only.jsonl`; then `python analysis/e9_lang_analyze.py rounds_q8.jsonl <target> --target-only target_only.jsonl --json e9_lang_analysis_q8.json` |
 | Greedy equivalence and batch invariance (§7) | any | `scripts/run_greedy_matrix.sh`, `analysis/divergence.py`, `analysis/batch_invariance.py` |
 | C3 regression bisect | full clone | `scripts/bisect_perf.sh`, `analysis/nsys_decode_overhead.sh` |
-| Figures (`results/figures/`, light and dark, plus the plotted numbers in `data/`) | none | `python analysis/make_figures.py` (reads only `results/summary/`) |
+| Figures (`results/figures/`, light and dark, plus the plotted numbers in `tables/`) | none | `python analysis/make_figures.py` (reads only `results/summary/`) |
 
 The text probe used by the breakdowns is `$H/probe/track_t_probe20.jsonl` (`benchmark/build_probe_text.py`). The
 Japanese analysis used a timing tree with `e8-kernel-experiments.patch` in place of C1–C3. Acceptance and
