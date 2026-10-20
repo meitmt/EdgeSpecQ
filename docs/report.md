@@ -173,7 +173,7 @@ unattributed remainder of its total.
 - **Jetson: the drafter is the bottleneck, and inside it the Markov head.**
   - Nsight shows 8 serial single-column GEMVs over `markov_w2` (256 × 128k) per round, 1.67 ms each. That is
     about 13.5 ms, or 54 % of draft time.
-  - The same GEMV takes 88 µs on the desktop, where the 33 MB matrix sits in the 48 MB L2. The Jetson's 2 MB L2
+  - The same GEMV takes 88 µs on the desktop, where the 33 MiB matrix sits in the 48 MB L2. The Jetson's 2 MB L2
     sends every read to DRAM.
   - This cost is invisible on the large-cache hardware of the official benchmarks.
   - Verification on Jetson is almost free (1.07× a single token), so speculation pays off most there.
