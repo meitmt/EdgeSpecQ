@@ -128,3 +128,26 @@ boards also pass `--cache-ram 0`.
 | `analysis/e8_*`, `analysis/e9_*` | Per-round time breakdowns, Markov-head kernel study, vocabulary and Japanese analyses |
 | `scripts/run_s3.sh`, `analysis/judge_greedy.py`, `tests/` | Greedy-equivalence matrix, its judgment and tests (`python -m unittest discover -s tests`) |
 | `analysis/make_figures.py` | All figures, from `results/summary/` only |
+
+## License
+
+Code, documentation, figures and result summaries in this repository: MIT ([`LICENSE`](LICENSE)).
+
+### Third-party
+
+- **llama.cpp patches.** The files in `runtime/llama_cpp_patches/` modify
+  [llama.cpp](https://github.com/ggml-org/llama.cpp) (MIT, Copyright (c) The ggml authors) and contain lines from it;
+  they are offered under the same MIT terms.
+- **Models.** LFM2.5-VL-3B and its DSpark drafter are Liquid AI's models, licensed under the
+  [LFM Open License v1.0](https://www.liquid.ai/lfm-license). This repository contains no model weights. The drafters
+  that `scripts/quantize_draft.sh` and `scripts/make_e9_drafters.sh` produce are modified versions of
+  `LFM2.5-VL-3B-DSpark-F16.gguf` (requantized; draft vocabulary reduced, with an added `d2t` map), so their use and
+  redistribution are subject to the LFM Open License v1.0: include the license, state these changes and keep the
+  original notices. "LFM" and "Liquid" are used here only to describe where the models come from.
+- **Vocabulary counts.** `quantization/vocab_freq.npz` holds token counts only, no text: from the target's own answers
+  and from ultrachat_200k, WikiText-103, codeparrot-clean-valid, MetaMathQA, Japanese Wikipedia (20231101) and
+  databricks-dolly-15k-ja. Evaluation sets are referenced by sample ID only (`benchmark/manifests/`); building them
+  downloads the source datasets under their own terms.
+- **Phone builds.** `scripts/build_android_htp.sh` runs Qualcomm's toolchain image
+  (`ghcr.io/snapdragon-toolchain/arm64-android`, Android NDK and Hexagon SDK), which is not included here and is
+  subject to its own terms.
