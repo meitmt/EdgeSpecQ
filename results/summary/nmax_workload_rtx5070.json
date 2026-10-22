@@ -1,0 +1,276 @@
+{
+ "_doc": "Prompted by https://huggingface.co/LiquidAI/LFM2.5-VL-3B-DSpark-GGUF/discussions/3 (15 % acceptance on Wikitext with n_max 9): Q8_0 target and the official F16 drafter, n_max 8 / 9 / 10 (10 is clamped to the drafter's dflash.block_size of 9), target-only as the reference, on two prompt sets:   chat: the 20 chat-style text prompts of benchmark/build_probe_text.py (GSM8K, MATH-500, HumanEval, MBPP, MT-Bench)   wiki: the first 10 Wikitext-103 articles longer than 1500 characters (analysis/e9_corpus_freq.py cache),         700 characters each, after \"Continue the following Wikipedia article.\" each greedy and with the model card's sampling (T 0.2, top-k 50, seed 0), up to 256 generated tokens.",
+ "llama_cpp": "620d2225c, unpatched",
+ "gpu": "RTX 5070",
+ "target": "LFM2.5-VL-3B-Q8_0",
+ "drafter": "LFM2.5-VL-3B-DSpark-F16 (official)",
+ "max_tokens": 256,
+ "rows": [
+  {
+   "prompts": "chat",
+   "sampling": "greedy",
+   "n_max": 8,
+   "n_max_effective": 8,
+   "acceptance": 0.4386,
+   "accepted_per_round": 3.509,
+   "decode_tps": 314.0,
+   "target_only_tps": 158.1,
+   "speedup": 1.986,
+   "generated_tokens": 3864,
+   "drafted": 6810,
+   "accepted": 2987
+  },
+  {
+   "prompts": "chat",
+   "sampling": "greedy",
+   "n_max": 9,
+   "n_max_effective": 9,
+   "acceptance": 0.4203,
+   "accepted_per_round": 3.783,
+   "decode_tps": 321.6,
+   "target_only_tps": 158.1,
+   "speedup": 2.033,
+   "generated_tokens": 3864,
+   "drafted": 7226,
+   "accepted": 3037
+  },
+  {
+   "prompts": "chat",
+   "sampling": "greedy",
+   "n_max": 10,
+   "n_max_effective": 9,
+   "acceptance": 0.4203,
+   "accepted_per_round": 3.783,
+   "decode_tps": 320.7,
+   "target_only_tps": 158.1,
+   "speedup": 2.028,
+   "generated_tokens": 3864,
+   "drafted": 7226,
+   "accepted": 3037
+  },
+  {
+   "prompts": "chat",
+   "sampling": "t0.2_k50",
+   "n_max": 8,
+   "n_max_effective": 8,
+   "acceptance": 0.4196,
+   "accepted_per_round": 3.357,
+   "decode_tps": 308.6,
+   "target_only_tps": 159.1,
+   "speedup": 1.939,
+   "generated_tokens": 3563,
+   "drafted": 6497,
+   "accepted": 2726
+  },
+  {
+   "prompts": "chat",
+   "sampling": "t0.2_k50",
+   "n_max": 9,
+   "n_max_effective": 9,
+   "acceptance": 0.3999,
+   "accepted_per_round": 3.599,
+   "decode_tps": 314.2,
+   "target_only_tps": 159.1,
+   "speedup": 1.975,
+   "generated_tokens": 3563,
+   "drafted": 6925,
+   "accepted": 2769
+  },
+  {
+   "prompts": "chat",
+   "sampling": "t0.2_k50",
+   "n_max": 10,
+   "n_max_effective": 9,
+   "acceptance": 0.3999,
+   "accepted_per_round": 3.599,
+   "decode_tps": 313.2,
+   "target_only_tps": 159.1,
+   "speedup": 1.968,
+   "generated_tokens": 3563,
+   "drafted": 6925,
+   "accepted": 2769
+  },
+  {
+   "prompts": "wiki",
+   "sampling": "greedy",
+   "n_max": 8,
+   "n_max_effective": 8,
+   "acceptance": 0.2207,
+   "accepted_per_round": 1.766,
+   "decode_tps": 202.3,
+   "target_only_tps": 159.1,
+   "speedup": 1.271,
+   "generated_tokens": 131,
+   "drafted": 376,
+   "accepted": 83
+  },
+  {
+   "prompts": "wiki",
+   "sampling": "greedy",
+   "n_max": 9,
+   "n_max_effective": 9,
+   "acceptance": 0.1898,
+   "accepted_per_round": 1.708,
+   "decode_tps": 189.9,
+   "target_only_tps": 159.1,
+   "speedup": 1.194,
+   "generated_tokens": 131,
+   "drafted": 432,
+   "accepted": 82
+  },
+  {
+   "prompts": "wiki",
+   "sampling": "greedy",
+   "n_max": 10,
+   "n_max_effective": 9,
+   "acceptance": 0.1898,
+   "accepted_per_round": 1.708,
+   "decode_tps": 187.9,
+   "target_only_tps": 159.1,
+   "speedup": 1.181,
+   "generated_tokens": 131,
+   "drafted": 432,
+   "accepted": 82
+  },
+  {
+   "prompts": "wiki",
+   "sampling": "t0.2_k50",
+   "n_max": 8,
+   "n_max_effective": 8,
+   "acceptance": 0.1799,
+   "accepted_per_round": 1.44,
+   "decode_tps": 179.1,
+   "target_only_tps": 159.5,
+   "speedup": 1.123,
+   "generated_tokens": 223,
+   "drafted": 728,
+   "accepted": 131
+  },
+  {
+   "prompts": "wiki",
+   "sampling": "t0.2_k50",
+   "n_max": 9,
+   "n_max_effective": 9,
+   "acceptance": 0.163,
+   "accepted_per_round": 1.467,
+   "decode_tps": 174.5,
+   "target_only_tps": 159.5,
+   "speedup": 1.094,
+   "generated_tokens": 223,
+   "drafted": 810,
+   "accepted": 132
+  },
+  {
+   "prompts": "wiki",
+   "sampling": "t0.2_k50",
+   "n_max": 10,
+   "n_max_effective": 9,
+   "acceptance": 0.163,
+   "accepted_per_round": 1.467,
+   "decode_tps": 173.8,
+   "target_only_tps": 159.5,
+   "speedup": 1.09,
+   "generated_tokens": 223,
+   "drafted": 810,
+   "accepted": 132
+  }
+ ],
+ "raw": {
+  "0|chat|greedy": {
+   "n": 3842,
+   "ms": 24294.604000000003,
+   "dn": 0,
+   "da": 0
+  },
+  "0|chat|t0.2_k50": {
+   "n": 3576,
+   "ms": 22475.972999999998,
+   "dn": 0,
+   "da": 0
+  },
+  "0|wiki|greedy": {
+   "n": 131,
+   "ms": 823.372,
+   "dn": 0,
+   "da": 0
+  },
+  "0|wiki|t0.2_k50": {
+   "n": 57,
+   "ms": 357.364,
+   "dn": 0,
+   "da": 0
+  },
+  "8|chat|greedy": {
+   "n": 3864,
+   "ms": 12305.057000000003,
+   "dn": 6810,
+   "da": 2987
+  },
+  "8|chat|t0.2_k50": {
+   "n": 3563,
+   "ms": 11546.426000000001,
+   "dn": 6497,
+   "da": 2726
+  },
+  "8|wiki|greedy": {
+   "n": 131,
+   "ms": 647.647,
+   "dn": 376,
+   "da": 83
+  },
+  "8|wiki|t0.2_k50": {
+   "n": 223,
+   "ms": 1244.949,
+   "dn": 728,
+   "da": 131
+  },
+  "9|chat|greedy": {
+   "n": 3864,
+   "ms": 12016.340999999999,
+   "dn": 7226,
+   "da": 3037
+  },
+  "9|chat|t0.2_k50": {
+   "n": 3563,
+   "ms": 11341.542999999998,
+   "dn": 6925,
+   "da": 2769
+  },
+  "9|wiki|greedy": {
+   "n": 131,
+   "ms": 689.814,
+   "dn": 432,
+   "da": 82
+  },
+  "9|wiki|t0.2_k50": {
+   "n": 223,
+   "ms": 1277.623,
+   "dn": 810,
+   "da": 132
+  },
+  "10|chat|greedy": {
+   "n": 3864,
+   "ms": 12048.866,
+   "dn": 7226,
+   "da": 3037
+  },
+  "10|chat|t0.2_k50": {
+   "n": 3563,
+   "ms": 11377.437,
+   "dn": 6925,
+   "da": 2769
+  },
+  "10|wiki|greedy": {
+   "n": 131,
+   "ms": 697.238,
+   "dn": 432,
+   "da": 82
+  },
+  "10|wiki|t0.2_k50": {
+   "n": 223,
+   "ms": 1283.228,
+   "dn": 810,
+   "da": 132
+  }
+ }
+}

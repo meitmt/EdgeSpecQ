@@ -331,6 +331,11 @@ Also measured:
     0.0011). On the phone the criteria are not met: the Hexagon NPU diverges at margins up to 0.65 (its logits move
     by up to 4 with batch size even without speculation), and the CPU at `n_max` 1 diverges on long-context image
     prompts (its batch-2 path is bit-exact only for short contexts, on ARM and x86 alike).
+- **Workload and `n_max` with the official drafter** (unpatched `620d2225c`, RTX 5070, Q8_0 target; checking a
+  report of 15 % acceptance on Wikitext, `analysis/nmax_workload_check.py`, `nmax_workload_rtx5070.json`):
+  chat-style text prompts reach 0.40–0.44 acceptance and about 2× decode, Wikitext continuation 0.16–0.22 and
+  1.09–1.27×. `n_max` above 9 is clamped to the drafter's `dflash.block_size` of 9 and changes nothing; on
+  Wikitext `n_max` 8 is faster than 9.
 - **Sampling** (dev120, speedup vs B0 under the same sampling):
 
   | Platform | greedy | model card (T 0.2, top-k 50; 3 seeds) | T 0.7 |
