@@ -1,5 +1,5 @@
 {
- "_doc": "Divergences that break an exact criterion of S3 (proj v1.11 §4.5) but were investigated and documented (docs/limitations.md §1). judge_greedy.py accepts an entry only while the divergence stays a near-tie below max_margin, so a later, larger divergence on the same prompt still fails.",
+ "_doc": "Divergences that break an exact criterion of S3 (docs/limitations.md §1) but were investigated and documented (docs/limitations.md §1). judge_greedy.py accepts an entry only while the divergence stays a near-tie below max_margin, so a later, larger divergence on the same prompt still fails.",
  "exceptions": [
   {
    "group": "s3vl",

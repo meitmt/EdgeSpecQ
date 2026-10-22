@@ -389,8 +389,8 @@ Phone layout under `/data/local/tmp/edgespecq` (`adb push`):
   only edge's `libggml-base.so`);
 - models: `models/{target,draft,quant,e9}/`, the same file names as on the host.
 
-When adb is the Windows binary used from WSL2, enable mirrored networking so that `adb forward` ports are reachable
-from WSL.
+The harness runs `adb` from `PATH`; set `ADB=/path/to/adb` to use another binary. When that is the Windows
+`adb.exe` used from WSL2, enable mirrored networking so that `adb forward` ports are reachable from WSL.
 
 ### R5. Measurements
 

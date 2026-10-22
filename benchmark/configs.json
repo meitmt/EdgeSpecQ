@@ -1,5 +1,5 @@
 {
-  "_doc": "Evaluation configurations (proj §5.3 B0-B12, E10 A0-A7). target/draft are file tags: targets under models/target/LFM2.5-VL-3B-<target>.gguf; drafters F16 -> models/draft, <base> -> models/quant, <base>-V<size>k[-i32] -> models/e9. runtime names a set of shared libraries per platform (see runtimes). n_max null = platform default.",
+  "_doc": "Evaluation configurations: B0-B12 (precision matrix) and A0-A7 (ablation ladder, docs/report.md §2.2). target/draft are file tags: targets under models/target/LFM2.5-VL-3B-<target>.gguf; drafters F16 -> models/draft, <base> -> models/quant, <base>-V<size>k[-i32] -> models/e9. runtime names a set of shared libraries per platform (see runtimes). n_max null = platform default.",
 
   "platforms": {
     "jetson": {
@@ -15,7 +15,7 @@
       }
     },
     "jetson_25w": {
-      "_doc": "same as jetson, measured in the factory-default 25W mode without jetson_clocks (E10); own result dir",
+      "_doc": "same as jetson, measured in the factory-default 25W mode without jetson_clocks; own result dir",
       "home": "~/mt_test/liquid_ai",
       "llama_dir": "~/mt_test/liquid_ai/llama.cpp",
       "n_max": 6,
@@ -27,10 +27,10 @@
       }
     },
     "phone": {
-      "_doc": "OnePlus 13 (Snapdragon 8 Elite, 24 GB), CPU backend; llama-server runs on the device over adb (scripts/build_android.sh, binaries and models pushed to home). Only C3/C4 apply on CPU, so there are two runtimes. adb.serial null = adb's default device ($ANDROID_SERIAL or the only one connected).",
+      "_doc": "OnePlus 13 (Snapdragon 8 Elite, 24 GB), CPU backend; llama-server runs on the device over adb (scripts/build_android.sh, binaries and models pushed to home). Only C3/C4 apply on CPU, so there are two runtimes. adb.serial null = adb's default device ($ANDROID_SERIAL or the only one connected); $ADB overrides adb.exe (e.g. the Windows adb.exe when running from WSL2).",
       "home": "/data/local/tmp/edgespecq",
       "log_home": "~/edgespecq",
-      "adb": {"exe": "/mnt/c/liquid ai/tools/platform-tools/adb.exe", "serial": null},
+      "adb": {"exe": "adb", "serial": null},
       "cooldown": {"max_battery_temp_c": 36, "timeout_s": 900, "pause_above_c": 45, "resume_below_c": 40},
       "port": 8097,
       "ngl": 0,
@@ -43,7 +43,7 @@
       "_doc": "OnePlus 13, Hexagon NPU (HTP v79) for target and drafter (scripts/build_android_htp.sh). require_device makes run_eval refuse to measure when the target weights are not on HTP0 (silent CPU fallback).",
       "home": "/data/local/tmp/edgespecq",
       "log_home": "~/edgespecq",
-      "adb": {"exe": "/mnt/c/liquid ai/tools/platform-tools/adb.exe", "serial": null},
+      "adb": {"exe": "adb", "serial": null},
       "cooldown": {"max_battery_temp_c": 36, "timeout_s": 900, "pause_above_c": 45, "resume_below_c": 40},
       "port": 8097,
       "ngl": 99,

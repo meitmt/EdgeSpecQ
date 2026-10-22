@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the Japanese pre-confirmation set (E7 pilot, proj v1.9): 75 samples, 15 per category, seeded.
+"""Build the Japanese evaluation set ja75 (docs/report.md §6): 75 samples, 15 per category, seeded.
 
   ja_reasoning   JMMMU (JMMMU/JMMMU, MIT)                          multiple choice, single-image items only,
                                                                     Japanese reasoning instruction before the question

@@ -32,7 +32,7 @@ F16 included. The CPU backend is invariant at batch 2 only for short contexts, o
 Hexagon NPU the single-token and multi-token paths give clearly different logits: even without speculation, the
 NPU's output depends on how a prompt is split into batches.
 
-**Criteria** (defined in proj v1.3, unchanged since): (1) with an F16 target every speculative run must reproduce
+**Criteria** (defined at the start of the project and unchanged since): (1) with an F16 target every speculative run must reproduce
 the target-only output exactly; (2) with a quantized target, outputs may differ only where the target-only top-1
 and top-2 logprobs at the first differing token are within 0.3 (*margin* < 0.3); (3) on the CPU backend with
 `n_max` 1 the outputs must be identical. A divergence that cannot be located (same tokens, different length)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """S3 judgment: is speculative greedy decoding equivalent to target-only greedy decoding on the same target?
 
-Criteria (proj v1.11 §4.5, defined in v1.3):
+Criteria (docs/limitations.md §1):
   1. F16 target: every speculative run produces exactly the target-only output, for every prompt.
   2. Quantized target: outputs may differ, but only at numerical near-ties: at the first differing token the
      target-only top-1/top-2 logprob margin must be < 0.3 (quantized kernels are not batch-invariant, so verifying

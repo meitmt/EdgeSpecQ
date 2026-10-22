@@ -39,7 +39,7 @@ outputs do not depend on the drafter variant.
 
 | Document | Contents |
 |---|---|
-| [`docs/tech_note_midterm.md`](docs/tech_note_midterm.md) | Three-page technical note: bottlenecks and deployment recommendations |
+| [`docs/tech_note.md`](docs/tech_note.md) | Three-page technical note: bottlenecks and deployment recommendations |
 | [`docs/report.md`](docs/report.md) | All results, contributions, and step-by-step reproduction |
 | [`docs/recommendations.md`](docs/recommendations.md) | Recommendations for the drafter, the runtime and deployment |
 | [`docs/limitations.md`](docs/limitations.md) | Greedy-equivalence results, scope and conditions of the measurements |
@@ -128,6 +128,19 @@ boards also pass `--cache-ram 0`.
 | `analysis/e8_*`, `analysis/e9_*` | Per-round time breakdowns, Markov-head kernel study, vocabulary and Japanese analyses |
 | `scripts/run_s3.sh`, `analysis/judge_greedy.py`, `tests/` | Greedy-equivalence matrix, its judgment and tests (`python -m unittest discover -s tests`) |
 | `analysis/make_figures.py` | All figures, from `results/summary/` only |
+
+### Names used in files and documents
+
+| Name | Meaning |
+|---|---|
+| B0–B12, R0/R1 | Evaluation configurations: target precision × drafter (`benchmark/configs.json`, [`docs/report.md`](docs/report.md) §1) |
+| A0–A7 | Ablation ladder from the unpatched target-only runtime to the edge configuration ([`docs/report.md`](docs/report.md) §2.2) |
+| C1–C4 | llama.cpp runtime fixes: C1 short-K GEMV on the faster kernel, C2 MMVQ layout on Jetson Orin, C3 per-token copies after upstream #29622, C4 Markov chain kept in the draft vocabulary |
+| P3, V32k, i32 | Drafter variants: decoder Q4_K with projection and Markov head Q8_0; 32k-token draft vocabulary; 32-bit `d2t` map |
+| E8 (`e8_*`) | Per-round time breakdowns and the Markov-head kernel study |
+| E9 (`e9_*`) | Reduced-vocabulary drafters, and the round-by-round Japanese analysis |
+| S3 (`s3_*`) | Greedy-equivalence checks against target-only decoding ([`docs/limitations.md`](docs/limitations.md) §1) |
+| smoke24, dev120, ja75 | Evaluation sets: 24 and 120 multimodal samples in six categories, 75 Japanese samples |
 
 ## License
 

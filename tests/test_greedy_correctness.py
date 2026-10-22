@@ -1,4 +1,4 @@
-"""S3 greedy-equivalence checks (criteria: proj v1.11 §4.5; analysis/judge_greedy.py).
+"""S3 greedy-equivalence checks (criteria: docs/limitations.md §1; analysis/judge_greedy.py).
 
 1. The judgment logic on synthetic runs.
 2. The recorded judgment of the latest scripts/run_s3.sh matrix (results/summary/s3_greedy_equivalence.json):

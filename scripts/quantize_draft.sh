@@ -2,7 +2,7 @@
 # Quantize the official F16 DSpark drafter into uniform and mixed-precision variants, then write a tensor
 # manifest (CSV) and SHA256 for each output.
 #   quantize_draft.sh [src.gguf] [out_dir]
-# Variants (see proj.md 3.2): Q8_0, Q4_K_M, Q4_0 (uniform presets, same as Liquid's official text drafters)
+# Variants (docs/report.md §3): Q8_0, Q4_K_M, Q4_0 (uniform presets, same as Liquid's official text drafters)
 # and P3 = decoder Q4_K, projection (fc) + Markov head Q8_0.
 set -euo pipefail
 H=${EDGESPECQ_HOME:-$HOME/edgespecq}

@@ -48,10 +48,11 @@ def image_part(path):
 
 
 def adb_cmd(plat):
-    """adb executable plus the device selection: the platform's "serial" if set, otherwise adb's own default
-    ($ANDROID_SERIAL, or the only connected device)."""
+    """adb executable ($ADB, else the platform's "exe", else adb on PATH) plus the device selection: the platform's
+    "serial" if set, otherwise adb's own default ($ANDROID_SERIAL, or the only connected device)."""
     a = plat["adb"]
-    return [a["exe"], *(["-s", a["serial"]] if a.get("serial") else [])]
+    exe = os.environ.get("ADB") or a.get("exe") or "adb"
+    return [exe, *(["-s", a["serial"]] if a.get("serial") else [])]
 
 
 def adb(plat, *args, **kw):
