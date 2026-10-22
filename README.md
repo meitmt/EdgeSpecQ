@@ -107,8 +107,11 @@ Requirements: CUDA ≥ 12.6 (Jetson, JetPack 6.2) or ≥ 13.2 (desktop), CMake, 
 
 ## The edge drafters
 
-Exported from the official `LFM2.5-VL-3B-DSpark-F16.gguf`, no retraining. SHA256 of each file in
-[`benchmark/manifests/models.sha256`](benchmark/manifests/models.sha256).
+Exported from the official `LFM2.5-VL-3B-DSpark-F16.gguf`, no retraining. Ready-to-use files (LFM Open License
+v1.0) are on Hugging Face:
+[meit-ut/LFM2.5-VL-3B-DSpark-Edge-GGUF](https://huggingface.co/meit-ut/LFM2.5-VL-3B-DSpark-Edge-GGUF). There the
+reduced-vocabulary drafters come with an I64 `d2t` that unpatched llama.cpp loads, and with the I32 `d2t` used here
+(needs C4) in `c4/`. SHA256 of each file in [`benchmark/manifests/models.sha256`](benchmark/manifests/models.sha256).
 
 | File | Recipe | Use |
 |---|---|---|

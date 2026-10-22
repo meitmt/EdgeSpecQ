@@ -3,7 +3,8 @@
 *Liquid AI LFM2.5-VL-3B with its DSpark speculative-decoding drafter, measured through llama.cpp on an 8 GB Jetson
 Orin Nano Super, a Snapdragon 8 Elite phone (Hexagon NPU and CPU) and an RTX 5070. October 2026. All numbers come
 from files in `results/summary/`; how to reproduce them is in [`report.md`](report.md), and what they do not show
-is in [`limitations.md`](limitations.md).*
+is in [`limitations.md`](limitations.md). The drafters are on Hugging Face:
+[meit-ut/LFM2.5-VL-3B-DSpark-Edge-GGUF](https://huggingface.co/meit-ut/LFM2.5-VL-3B-DSpark-Edge-GGUF).*
 
 ## Summary
 
