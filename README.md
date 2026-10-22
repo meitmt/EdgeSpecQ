@@ -43,6 +43,7 @@ outputs do not depend on the drafter variant.
 | [`docs/report.md`](docs/report.md) | All results, contributions, and step-by-step reproduction |
 | [`docs/recommendations.md`](docs/recommendations.md) | Recommendations for the drafter, the runtime and deployment |
 | [`docs/limitations.md`](docs/limitations.md) | Greedy-equivalence results, scope and conditions of the measurements |
+| [`docs/AI_use.md`](docs/AI_use.md) | How AI tools were used in this project |
 | [`results/summary/`](results/summary/) | Every number in these documents (CSV / JSON); figures in [`results/figures/`](results/figures/) |
 
 ## Reproduce the main experiment
