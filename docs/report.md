@@ -1,8 +1,9 @@
 # EdgeSpecQ: quantized DSpark on edge devices — contributions, results and reproduction
 
-Status: 2026-10-19. This document covers everything measured so far on the three platforms. Every number in it
-comes from a CSV or JSON file in `results/summary/` (named next to each table) and can be regenerated with the
-commands in [Reproduction](#reproduction). Deployment advice derived from these results is in
+Status: 2026-10-23. This document covers everything measured so far on the three platforms. Headline results come
+from CSV and JSON files in `results/summary/`, named next to each table; supporting measurements (Nsight
+profiles, llama-bench comparisons, logs) are linked next to the relevant sections. Both can be regenerated with
+the commands in [Reproduction](#reproduction). Deployment advice derived from these results is in
 [`recommendations.md`](recommendations.md).
 
 **Subject.** Liquid AI's LFM2.5-VL-3B with its DSpark speculative-decoding drafter, run through llama.cpp on an
@@ -16,11 +17,11 @@ real edge hardware, where the time goes, and what can be changed in the deployme
 | | Result |
 |---|---|
 | **Speedup on an 8 GB Jetson** | Unpatched target-only decode 27.1 t/s → official F16 drafter 50.4 t/s → **86.6 t/s** with our drafter and runtime changes: **3.20×** over target-only and **1.72×** over the official drafter as shipped (dev120, 6 multimodal task categories, MAXN_SUPER). 3.07× in the factory-default 25 W mode. |
-| **Drafter changes, no retraining** | Quantized (P3: decoder Q4_K, projection and Markov head Q8_0) and reduced-vocabulary (32k of 128k tokens) DSpark drafters, exported from the official F16 GGUF. Outputs are identical to the full-vocabulary drafter's. Regenerating them from this repository gives bit-identical files (checked by SHA256). |
-| **Four llama.cpp runtime fixes** | C1/C2: CUDA kernel selection for short-K GEMV and Jetson Orin (target-only decode **+15 %** for Q4_K_M models; on current master −1 % to +38 % depending on the quantization type; DSpark +16–30 %). C3: per-token copies after upstream #29622 (desktop +3.5–4.2 %). C4: DSpark Markov chain kept in the draft vocabulary (Jetson +3 %, desktop −8 % → on par). |
-| **Where the time goes** | Per-round breakdowns on all three platforms. On Jetson the Markov head was over half the drafter time, a cost that large-cache hardware hides. On the phone NPU, verifying 2–9 tokens costs about 1.8× a single-token decode, which caps DSpark there at about 1.3×. |
-| **Japanese** | DSpark gives about 70 % of its English gain on Japanese (desktop 1.30× vs 1.80×, Jetson 1.98× vs 2.77×). The cause, measured round by round: the **target's own uncertainty on kanji**, amplified by tokenization (1.5 vs 4.7 characters per token). It is not a weaker drafter, and there is no gap on open-ended text. |
-| **Robustness** | Holds under the model card's sampling settings (1.77× vs 1.80× greedy on desktop, 2.69× vs 2.77× on Jetson, 3 seeds), and in the default power mode. The drafter choice never changes the output. Against target-only greedy, outputs differ only at near-ties on the RTX 5070 and Jetson (F16 exact except two ties at margins 0.0036 and 0.0011); on the phone NPU and on the phone CPU with long contexts the S3 criteria are not met, which is traced to the backends' batch-shape numerics (`docs/limitations.md` §1). |
+| **Drafter changes, no retraining** | Quantized (P3: decoder Q4_K, projection and Markov head Q8_0) and reduced-vocabulary (32k of 128k tokens) DSpark drafters, exported from the official F16 GGUF. In the RTX 5070 probe matrix the target's greedy outputs were identical across drafters for a fixed target and `n_max`; on the 24-sample multimodal set the official and the edge drafter differed on 1 of 24 samples on each GPU, both within the near-tie criterion (§7; details in `limitations.md` §1). Regenerating them from this repository gives bit-identical files (checked by SHA256). |
+| **Four llama.cpp runtime fixes** | C1/C2: CUDA kernel selection for short-K GEMV and Jetson Orin (target-only decode **+15 %** for Q4_K_M models; on llama.cpp `7951f601e` −1 % to +38 % depending on the quantization type; DSpark +16–30 %). C3: per-token copies after upstream #29622 (desktop +3.5–4.2 %). C4: DSpark Markov chain kept in the draft vocabulary (Jetson +3 %, desktop −8 % → on par). |
+| **Where the time goes** | Per-round breakdowns on all three platforms. On Jetson the Markov head was over half the drafter time, a cost that large-cache hardware hides. On the phone NPU, verification is the largest cost: 3 tokens take 1.3× and 5–9 tokens 1.7–1.8× a single-token decode, 71 of the 109 ms round, and DSpark gives 1.29× on dev120. |
+| **Japanese** | DSpark's speedup on Japanese is about 70 % of its English speedup (desktop 1.30× vs 1.80×, Jetson 1.98× vs 2.77×; of the added speed, 38 % and 55 %). Round by round, Japanese captions lose most acceptance on **kanji, where the target itself is least confident**, and tokenization (1.5 vs 4.7 characters per token) multiplies the number of such decisions. This points to the target's uncertainty as a likely explanation; a controlled test, such as a drafter trained on more Japanese, has not been run (§6.2). |
+| **Robustness** | Holds under the model card's sampling settings (1.77× vs 1.80× greedy on desktop, 2.69× vs 2.77× on Jetson, 3 seeds), and in the default power mode. In the RTX 5070 probe matrix, changing the drafter did not change the output for a fixed target and `n_max`; on the 24-sample set the official and edge drafters differed on 1 of 24 samples per GPU, at near-ties. Against target-only greedy, outputs differ only at near-ties on the RTX 5070 and Jetson (F16 exact except two ties at margins 0.0036 and 0.0011); on the phone NPU and on the phone CPU with long contexts the S3 criteria are not met, which is traced to the backends' batch-shape numerics (`limitations.md` §1). |
 | **Measurement pitfalls found** | Seven ways the numbers silently go wrong on edge devices, each found, fixed in the harness and documented (§7). Examples: llama-server's 8 GiB prompt cache on an 8 GB board, an orphaned server answering for later configs, OEM CPU caps on Android. |
 
 ## 1. Setup
@@ -63,18 +64,28 @@ real edge hardware, where the time goes, and what can be changed in the deployme
 
 Platform `n_max`: Jetson 6, desktop 8, phone 8 (each chosen by measurement, §4).
 
-## 2. End-to-end results
+## 2. Decode throughput
 
-### 2.1 Headline (dev120, greedy)
+All numbers in this section are decode throughput as defined in §1. They exclude image encoding and prefill, so
+they are not whole-request speedups.
 
-| Platform | Target only, unpatched | Official F16 drafter as shipped | **Best** | vs target-only [95 % CI] | vs official drafter |
-|---|---:|---:|---:|---:|---:|
-| Jetson MAXN | 27.1 t/s (A0) | 50.4 (A1) | **86.6** (B11) | **3.20×** vs A0; 2.77× [2.52, 3.05] vs B0 | **1.72×** |
-| Jetson 25 W | 24.7 (A0) | 45.4 (A1) | **75.9** (B11) | **3.07×** [2.80, 3.36] | 1.67× |
-| RTX 5070 | 220.5 (A0) | 329.4 (B1m) | **427.7** (B10: Q4_0 target + Q4_0 drafter) | 1.88× [1.74, 2.05] vs B0 | 1.30× |
-| | | | 408.3 (B11) | 1.80× [1.63, 1.99] | 1.24× |
-| Phone NPU | 24.4 (B0) | 29.4 (B1, 1.20×) | **31.4** (B11) | **1.29×** [1.15, 1.44] | 1.07× |
-| Phone CPU (smoke24) | 16.7 (B0) | 11.6 (B1) | — | 0.67–0.69× (slower) | — |
+### 2.1 Headline (dev120, greedy, Q4_K_M target throughout)
+
+| Platform | Target only, unpatched (A0) | Target only, patched (B0) | Official F16 drafter as shipped | **This work (B11)** | B11 vs A0 | B11 vs B0 [95 % CI] | B11 vs official drafter |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Jetson MAXN | 27.1 t/s | 31.2 | 50.4 (A1) | **86.6** | **3.20×** | 2.77× [2.52, 3.05] | **1.72×** |
+| Jetson 25 W | 24.7 | — | 45.4 (A1) | **75.9** | **3.07×** [2.80, 3.36] | — | 1.67× |
+| RTX 5070 | 220.5 | 227.3 | 329.4 (B1m) | **408.3** | 1.85× | 1.80× [1.63, 1.99] | 1.24× |
+| Phone NPU | — | 24.4 | 29.4 (B1) ¹ | **31.4** | — | **1.29×** [1.15, 1.44] | 1.07× |
+| Phone CPU (smoke24) | — | 16.7 | 11.6 (B1) ¹ | 11.2 | — | 0.67× (slower) | 0.97× |
+
+¹ On the phone the official drafter was measured on the patched runtime only (C1 and C2 are CUDA fixes and do not
+apply there).
+
+**Highest throughput with a different target.** On the RTX 5070 a Q4_0 target with a Q4_0 drafter (B10) reaches
+427.7 t/s: 1.76× over the same Q4_0 target without speculation (B8, 243.6 t/s). Its 1.94× over A0 also contains
+the change of target precision, and the task quality of the Q4_0 target was not evaluated. On the Jetson the same
+configuration is slower than B11.
 
 Files: `dev120_jetson_maxn.csv`, `dev120_jetson_25w.csv`, `dev120_rtx5070.csv`, `phone_htp_dev120.csv`,
 `phone_cpu_smoke24.csv`.
@@ -100,9 +111,10 @@ TextVQA 2.31×, GQA 2.16×. The gain grows with output length. On the phone NPU,
 desktop's run-to-run drift.
 
 Notes:
-- C1–C3 do nothing for an F16 drafter (A1→A2). C1 targets quantized GEMVs, and C2 targets single-token target
-  decode, which speculation replaces with multi-token verification. They matter for quantized drafters and
-  target-only decode: B0 vs A0 on Jetson is +15.2 %, all from C2.
+- C1 and C2 do nothing for an F16 drafter in this ladder (A1→A2): C1 targets quantized GEMVs, and C2 targets
+  single-token target decode, which speculation replaces with multi-token verification. C3 accounts for the small
+  desktop gain from A1 to A2 (+1.6 %). C1 and C2 matter for quantized drafters and target-only decode: B0 vs A0 on
+  Jetson is +15.2 %, all from C2.
 - The reduced vocabulary needs C4 on the desktop. Without C4 the full-vocabulary work per draft position cancels
   the savings, because the desktop's 48 MB L2 already holds the Markov head.
 
@@ -130,8 +142,16 @@ at Q8_0. The Markov head stays at Q8 so the drafter is safe on runtimes without 
 - They keep the N most useful of 128k tokens. `markov_w2` is sliced to those rows, the drafter gets its own output
   head (the matching rows of the target's tied `token_embd`), and a `d2t` map from draft rows to target ids is
   added. llama.cpp's dflash loader already reads `d2t`.
-- Both weights are quantized along the hidden dimension only, so slicing rows is lossless. Every kept token's
-  logit is bit-identical to the full drafter's, and on the same target the greedy outputs are identical.
+- Both weights are quantized along the hidden dimension only, so slicing copies the kept rows exactly: for the
+  same drafter state, every kept token gets the same logit as in the full drafter.
+- The draft tokens themselves can differ. When the full drafter's top choice is a dropped token, the reduced
+  drafter picks another one, and the following Markov steps continue from it.
+- The target's verified output does not depend on the draft tokens except through verification numerics. In the
+  greedy-equivalence probe matrix on the RTX 5070 (summarized in §7, detailed in `limitations.md` §1), every
+  drafter, including the reduced-vocabulary one, gave the same outputs for a given target and `n_max`. Because
+  verification batch shapes change with acceptance, near-tie flips remain possible: on the 24-sample multimodal
+  set the official and the edge drafter differed on 1 of 24 samples on the RTX 5070 and on the Jetson, both runs
+  within the near-tie criterion against target-only decoding.
 - **Ranking matters more than size.** Generic corpora (chat, Wikipedia, code, math, Japanese) miss LFM2.5's own
   output style: Markdown bold, LaTeX, U+202F and U+2011. Ranking by the target's own answers to 900 non-evaluation
   prompts raises the 32k English retention from 85 % to 95.5 % of the full-vocabulary accepted length
@@ -150,7 +170,7 @@ at Q8_0. The Markov head stays at Q8 so the drafter is safe on runtimes without 
 | full-vocabulary Q8_0 | 13.2 |
 | P3 | 11.5 |
 | P3-V32k | 7.4 |
-| P3-V32k + C4 | **6.3** (−54 %) |
+| P3-V32k + C4 | **6.3** (−52 %) |
 
 Accepted length drops 2 %. Files: `e9c4_jetson_maxn_breakdown_n6.json`, `e9c4_jetson_maxn_e2e_n6.csv`.
 
@@ -172,7 +192,7 @@ unattributed remainder of its total.
 
 - **Jetson: the drafter is the bottleneck, and inside it the Markov head.**
   - Nsight shows 8 serial single-column GEMVs over `markov_w2` (256 × 128k) per round, 1.67 ms each. That is
-    about 13.5 ms, or 54 % of draft time.
+    about 13.5 ms, or 53 % of draft time.
   - The same GEMV takes 88 µs on the desktop, where the 33 MiB matrix sits in the 48 MB L2. The Jetson's 2 MB L2
     sends every read to DRAM.
   - This cost is invisible on the large-cache hardware of the official benchmarks.
@@ -181,6 +201,8 @@ unattributed remainder of its total.
   - Single-token decode is about 40 ms. Verifying 3 tokens takes 52 ms, and 5–9 tokens 67–71 ms.
   - The cost is a fixed one for leaving the single-token path. The default HMX path is already the faster one;
     forcing HVX doubles verify time.
+  - Verification takes 71 of the 109 ms round, and DSpark gives 1.29× on dev120. These measurements do not set an
+    upper bound on the speedup, which also depends on the accepted length and the draft cost.
   - Hence `n_max` 8 is best: n_max 2/3/4/6/8 give 35.0/33.2/34.2/36.6/37.2 t/s.
   - Moving the drafter to the Adreno GPU saves 3.6 ms of drafting but adds about 10 ms of cross-device traffic.
     Moving it to the CPU is 6× slower.
@@ -197,9 +219,9 @@ Files: `phone_breakdown/*.json`, `e9c4_jetson_maxn_breakdown_n6.json`. The Nsigh
 | # | Problem | Fix | Measured effect | Correctness check |
 |---|---|---|---|---|
 | C1 | CUDA uses MMVQ for single-column quantized GEMV with K ≤ 256, such as the Markov head. At K = 256, MMQ is 1.8–3.0× faster on sm_87. | Route that case to MMQ on Turing+ (`e8-shortk-igpu.patch`) | Jetson DSpark +16.5 / +17.0 / +29.9 / +17.8 % (Q8_0 / P3 / Q4_K_M / Q4_0 drafter); desktop +3.7–5.2 % | `test-backend-ops -o MUL_MAT` same as master; acceptance unchanged |
-| C2 | Integrated GPUs do not use the small-K MMVQ layout for N = 1 | Detect integrated GPUs and use small-K (same patch) | **Jetson target-only decode 27.27 → 31.43 t/s (+15.3 %)** with Q4_K_M, also +15.3 % on the 2.6B text model; no change on desktop. Rebased on master (Orin-only, `results/summary/upstream_c2_jetson/`): by quantization type −1 % (Q3_K_S) to +38 % (Q4_0); Q2_K, Q6_K, IQ4_XS only +2 % because the fused gate/up mat-vec path absorbs the gain (with CUDA fusion disabled, Q6_K gains +25 %) | as C1; perplexity identical |
+| C2 | Integrated GPUs do not use the small-K MMVQ layout for N = 1 | Detect integrated GPUs and use small-K (same patch) | **Jetson target-only decode 27.27 → 31.43 t/s (+15.3 %)** with Q4_K_M, also +15.3 % on the 2.6B text model; no change on desktop. Rebased on llama.cpp `7951f601e` (Orin-only, `results/summary/upstream_c2_jetson/`): by quantization type −1 % (Q3_K_S) to +38 % (Q4_0); Q2_K, Q6_K, IQ4_XS only +2 % because the fused gate/up mat-vec path absorbs the gain (with CUDA fusion disabled, Q6_K gains +25 %) | as C1; perplexity identical |
 | C3 | After upstream #29622, LFM2 text decode copies the inputs of unselected graph branches every token (CUDA syncs per 64 tokens 1312 → 1767) | Skip copying split inputs that only unselected branches read (`0001-…patch`) | desktop tg256 +3.5 % (2.6B), +4.2 % (VL-3B); sync count back to 1312; Jetson +0.2 % | 80 outputs byte-identical to master; `test-llama-archs` 402 OK |
-| C4 | With a reduced draft vocabulary, the DSpark Markov chain still scatters to 128k at every draft position | With I32 `d2t`, add the bias, take argmax and map ids in draft space, and scatter once (`e9-c4-draft-space.patch`, `src/models/dflash.cpp`) | Jetson draft 7.4 → 6.3 ms per round, end-to-end +2.9 %; desktop A6 → A7 +8.5 % | I64 and I32 drafters give the same draft tokens and accepted counts over 3140 rounds |
+| C4 | With a reduced draft vocabulary, the DSpark Markov chain still scatters to 128k at every draft position | With I32 `d2t`, add the bias, take argmax and map ids in draft space, and scatter once (`e9-c4-draft-space.patch`, `src/models/dflash.cpp`) | Jetson draft 7.4 → 6.3 ms per round, decode +2.9 %; desktop A6 → A7 +8.5 % | I64 and I32 drafters give the same draft tokens and accepted counts over 3140 rounds |
 
 How the C3 regression was found: `scripts/bisect_perf.sh` bisected the slowdown, judging each build by its ratio
 to an interleaved reference build, and `analysis/nsys_decode_overhead.sh` compared the builds' CUDA API calls and
@@ -210,7 +232,7 @@ Two further issues are documented but not fixed:
 - **C6:** the LFM2-VL vision encoder's `UPSCALE` (position-embedding interpolation) is the only vision op without a
   Hexagon implementation, so it falls back to the CPU.
 
-## 6. Contribution: Japanese characterization and root cause
+## 6. Contribution: Japanese characterization and a likely explanation
 
 ### 6.1 Speedup on ja75 (vs B0 on the same platform)
 
@@ -224,10 +246,12 @@ Two further issues are documented but not fixed:
 Files: `ja75_rtx5070.csv`, `ja75_jetson_maxn.csv`.
 
 On the desktop the official drafter gives no gain on Japanese. On the same 15 COCO images, Japanese captioning
-accepts 15–18 % fewer tokens than English (desktop B11: 3.36 vs 3.93). Unless asked for detail, LFM2.5-VL answers
+has a 15–18 % shorter mean accepted length than English (llama-server's per-round statistic in the ja75 and dev120
+runs; desktop B11: 3.36 vs 3.93). This is a different measure from the 25 % in §6.2, which counts accepted draft
+tokens per round, without the bonus token, in the round log of a Q8_0 drafter (2.34 vs 3.11). Unless asked for detail, LFM2.5-VL answers
 Japanese prompts in 4–14 tokens, so ja75 prompts ask for full answers.
 
-### 6.2 Why: round-by-round analysis
+### 6.2 Where the gap appears: round-by-round analysis
 
 `e9-server-round-log.patch` logs each draft, accepted count and target token. The setup is a Q8_0 drafter with the
 full vocabulary on the desktop, and a target-only run for the target's real probabilities.
@@ -247,18 +271,24 @@ full vocabulary on the desktop, and a target-only run for the target's real prob
 | Japanese punctuation | 10.8 % | 0.92 | 0.79 |
 | English words (English captions) | — | 0.77 | 0.69 |
 
-1. **The gap depends on the task.** On open-ended text both languages are equally low. Part of the earlier
-   "Japanese text" gap was the task type.
-2. **In captions, kanji is the weak class**, and the cause is the target, not the drafter. Acceptance tracks the
-   target's confidence the same way in both languages, about 0.03–0.13 above it in every class.
-3. **The uncertainty is spread out.** On kanji the target's top-2 mass is only 0.71 (English words 0.83), so
-   two-candidate tree drafting would help kanji no more than English.
+1. **The gap depends on the task.** On captions of the same 15 images, Japanese accepts 25 % fewer draft tokens
+   per round. On open-ended text both languages are similarly low, but those prompts are different tasks
+   (UltraChat and ELYZA), so this does not show that the gap disappears on open text.
+2. **In captions, kanji is the weak class, and it is also where the target is least confident.** For the
+   character classes shown, acceptance is within −0.02 to +0.13 of the target's top-1 probability. This is
+   consistent with the target's uncertainty limiting acceptance, but it is a correlation: under greedy
+   verification the drafter only has to predict the target's top choice, which a better drafter could do even
+   where the target's distribution is flat. No controlled experiment, such as a drafter trained on more Japanese, has been run.
+3. **The uncertainty is spread out.** On kanji the target's top-2 probability mass is only 0.71 (English words
+   0.83; `top2_mass_by_class` in the JSON). Adding the second candidate raises the mass by about 0.14 in both cases,
+   so two-candidate tree drafting would likely help kanji no more than English.
 4. **Tokenization multiplies the effect.** Japanese needs about 3× more tokens per character, so the same caption
    has about 3× more uncertain decisions.
 
-Implication for Liquid: more Japanese drafter training probably helps less than expected, because the ceiling is
-the target's uncertainty over kanji word choice. Tokenizer changes (more whole-word kanji tokens) or
-retrieval-style drafting for repeated named entities are more promising. Both are hypotheses we have not tested.
+Implication for Liquid, as hypotheses: if the target's uncertainty is the main limit, more Japanese drafter
+training would help less on Japanese than the English results suggest, and tokenizer changes (more whole-word kanji
+tokens) or retrieval-style drafting for repeated named entities could help more. Training a drafter on more
+Japanese and comparing acceptance is the experiment that would decide this; none of these has been tested.
 
 Method notes:
 - In speculative mode the server reports p ≈ 1 for accepted draft tokens, so probabilities come from target-only
@@ -270,8 +300,10 @@ File: `e9_lang_analysis_q8.json`.
 
 ## 7. Contribution: evaluation-design findings (measurement pitfalls)
 
-Each pitfall below produced plausible but wrong numbers before it was caught. The affected data was archived and
-rerun, and the harness now guards against it.
+Each pitfall below produced plausible but wrong numbers before it was caught, and the harness now guards against
+it. Where a pitfall affected published numbers the data was archived and rerun, with one exception: the phone NPU
+dev120 run, during which the heating was found, is kept and reported with that caveat (§8). The OEM CPU cap is a
+property of the device and is documented rather than avoided.
 
 | Pitfall | Symptom | Guard in the harness |
 |---|---|---|
@@ -284,13 +316,15 @@ rerun, and the harness now guards against it.
 | Short answers | Japanese and MMMU-Pro prompts produced 4-token answers, so decode speed was unmeasurable | Instruction placement fixed: MMMU-Pro step-by-step suffix, ja75 "answer in detail" |
 
 Also measured:
-- **Greedy equivalence (S3, `docs/limitations.md` §1).** 30 speculative runs on the RTX 5070 (4 target precisions
+- **Greedy equivalence (S3, details in `limitations.md` §1).** 30 speculative runs on the RTX 5070 (4 target precisions
   × 3 drafters × `n_max` 1/8, plus image prompts and a CPU control), judged by `analysis/judge_greedy.py`:
   - F16 targets match target-only greedy exactly on all 120 text outputs. On the image probe 19/20 match; the one
     divergence is a tie at margin 0.0036, recorded as a known exception.
   - Quantized targets diverge only at near-ties (median top-1/top-2 margin 0.02–0.06, max 0.20).
   - The CPU control with `n_max` 1 is identical.
-  - For a given target and `n_max`, all drafters (including the reduced-vocabulary one) give the same outputs.
+  - In this matrix, for a given target and `n_max`, all drafters (including the reduced-vocabulary one) give the
+    same outputs. On the 24-sample set below, the official and the edge drafter differ on 1 of 24 samples on each
+    GPU, both within the near-tie criterion.
   - Changing only the physical batch size, with no speculation, moves next-token logprobs by 0.04–0.06 on CUDA
     with F16 and by up to 2 with quantized weights. This is kernel batch-shape numerics, not a DSpark bug.
   - The 24-sample multimodal set on all three platforms: RTX 5070 and Jetson pass (one more F16 tie, margin
@@ -311,16 +345,20 @@ Also measured:
 - Sample sizes:
   - 120 samples per platform for English (6 × 20), 2–3 repetitions; the phone NPU had 1.
   - 75 for Japanese (15 per category).
-  - 15 + 15 per group in the root-cause analysis.
+  - 15 + 15 per group in the round-by-round Japanese analysis.
   - Confidence intervals cover sample variation, not run-to-run drift (about 3 % on the desktop).
 - Platform coverage:
   - Q8_0 targets (B4–B7) do not fit reliably in 8 GB with mmproj and a drafter, so they are desktop-only.
   - The phone was not measured on Japanese.
   - The phone NPU dev120 run heated up during measurement (§7), so its second half is indicative.
-- Task quality (accuracy) was not scored. Greedy outputs are identical across drafter variants on the same target,
-  so drafter choice cannot change quality under greedy decoding. Sampling quality was not evaluated.
-- Upstream status: the fixes are validated patches on `620d2225c` and not yet submitted upstream. C1–C4 have not
-  been re-validated on newer llama.cpp commits.
+- Task quality (accuracy) was not scored. Under greedy decoding the drafter can change outputs only at near-ties
+  (§7), so drafter choice is not expected to change quality materially; this was not measured. Sampling quality
+  was not evaluated.
+- Upstream status: C2 has been submitted to llama.cpp in an Orin-only form
+  ([ggml-org/llama.cpp#30858](https://github.com/ggml-org/llama.cpp/pull/30858), under review) and validated on
+  llama.cpp `7951f601e` (§5). C1, C3 and C4 are validated patches on `620d2225c` and have not been re-validated on newer
+  commits.
+- The speedups are for decoding only; whole-request latency (image encoding, prefill) was not compared.
 
 ## Reproduction
 
@@ -453,7 +491,7 @@ machine that holds the logs (`HOME` map in `summarize_eval.py`).
 | Per-round breakdown, phone NPU | `bash scripts/build_android_htp.sh timing` | same, with `ADB`, `SERIAL`, `BIN=<dev>/htp-timing/bin/llama-speculative-simple`, `REMOTE_ENV="LD_LIBRARY_PATH=<dev>/htp-timing/lib ADSP_LIBRARY_PATH=<dev>/htp-timing/lib"`, `EDGESPECQ_HOME=<dev>` and `--extra="--device HTP0 --device-draft HTP0"`; HVX vs HMX via `GGML_HEXAGON_MM_SELECT` in `REMOTE_ENV` |
 | Markov-head GEMV and kernel choice | patched tree with `e8-kernel-experiments.patch` | `analysis/e8_gemv_bench.sh`, `analysis/e8_nsys.sh` |
 | Reduced-vocabulary acceptance simulation | timing tree | `analysis/e9_collect.py`, then `analysis/e9_simulate.py` |
-| Japanese root cause (§6.2) | timing tree + `e9-server-round-log.patch` (llama-server) | `python analysis/e9_lang_rounds.py <timing_dir> <target> <Q8_0 drafter> rounds_q8.jsonl` and the same with drafter `none` → `target_only.jsonl`; then `python analysis/e9_lang_analyze.py rounds_q8.jsonl <target> --target-only target_only.jsonl --json e9_lang_analysis_q8.json` |
+| Japanese round-by-round analysis (§6.2) | timing tree + `e9-server-round-log.patch` (llama-server) | `python analysis/e9_lang_rounds.py <timing_dir> <target> <Q8_0 drafter> rounds_q8.jsonl` and the same with drafter `none` → `target_only.jsonl`; then `python analysis/e9_lang_analyze.py rounds_q8.jsonl <target> --target-only target_only.jsonl --json e9_lang_analysis_q8.json` |
 | Greedy equivalence and batch invariance (§7) | any | `scripts/run_greedy_matrix.sh`, `analysis/divergence.py`, `analysis/batch_invariance.py` |
 | C3 regression bisect | full clone | `scripts/bisect_perf.sh`, `analysis/nsys_decode_overhead.sh` |
 | Figures (`results/figures/`, light and dark, plus the plotted numbers in `tables/`) | none | `python analysis/make_figures.py` (reads only `results/summary/`) |

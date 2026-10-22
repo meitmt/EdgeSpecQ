@@ -14,12 +14,15 @@ dev120 (120 multimodal samples in six task categories), greedy decoding, decode 
 |---|---:|---:|---:|---:|---:|
 | Jetson Orin Nano Super, MAXN_SUPER | 27.1 | 50.4 | **86.6** | **3.20×** | **1.72×** |
 | Jetson Orin Nano Super, 25 W default | 24.7 | 45.4 | 75.9 | 3.07× | 1.67× |
-| RTX 5070 | 220.5 | 329.4 | 408.3 (427.7 with a Q4_0 target) | 1.85× (1.94×) | 1.24× (1.30×) |
+| RTX 5070 | 220.5 | 329.4 | 408.3 | 1.85× | 1.24× |
 | OnePlus 13, Hexagon NPU | 24.4 | 29.4 | 31.4 | 1.29× | 1.07× |
 
 Target LFM2.5-VL-3B Q4_K_M. "This work" is the edge drafter (P3 quantization, 32k-token draft vocabulary) on
-llama.cpp `620d2225c` with four runtime fixes. On the phone all three columns use the patched runtime. Greedy
-outputs do not depend on the drafter variant.
+llama.cpp `620d2225c` with four runtime fixes. On the phone all three columns use the patched runtime. These are
+decoding speedups; image encoding and prefill are not included. Changing the drafter changed the target's greedy
+output only at near-ties in our greedy-equivalence tests. On the RTX 5070 a Q4_0 target with a Q4_0 drafter is faster
+still (427.7 t/s, 1.76× over the same Q4_0 target without speculation), but the Q4_0 target's task quality was not
+evaluated.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="results/figures/fig3_platforms_dark.png">
@@ -29,13 +32,14 @@ outputs do not depend on the drafter variant.
 - **On an 8 GB Jetson the drafter is the bottleneck, not verification.** Inside the drafter it is the Markov head:
   eight serial GEMVs per round over a 33 MiB matrix that fits in a desktop GPU's 48 MB L2 but not in the Jetson's
   2 MB.
-- **Fixed without retraining:** a quantized, reduced-vocabulary drafter exported losslessly from the official F16
-  GGUF (regenerated bit for bit from this repository), four llama.cpp fixes (one submitted upstream as
+- **Fixed without retraining:** a quantized, reduced-vocabulary drafter whose kept rows are copied exactly from the
+  official F16 GGUF (regenerated bit for bit from this repository), four llama.cpp fixes (one submitted upstream as
   [ggml-org/llama.cpp#30858](https://github.com/ggml-org/llama.cpp/pull/30858)) and a per-device draft length.
-- **The gain follows the device's verification cost:** verifying 7–9 tokens costs 1.07× a single-token decode on
+- **The gain follows the device's verification cost:** verifying 9 tokens costs 1.07× a single-token decode on
   the Jetson, 1.6× on the RTX 5070 and 1.8× on the phone NPU. On the phone CPU speculation slows decoding down.
-- **Japanese gets about 70 % of the English gain**, because the target itself is uncertain over kanji and Japanese
-  text needs about three times as many tokens for the same content, not because the drafter is weaker.
+- **Japanese gets about 70 % of the English speedup.** Acceptance drops most on kanji, where the target itself is
+  least confident, and Japanese text needs about three times as many tokens for the same content. Whether a
+  drafter trained on more Japanese would close the gap has not been tested.
 
 | Document | Contents |
 |---|---|

@@ -138,18 +138,23 @@ def main():
         print("\ntarget confidence from the target-only run: p of its greedy token (entries are character runs)")
         print(f"  {'group':10s} {'mean p':>7s} {'p<0.5':>6s} {'p<0.8':>6s} | mean p by class: "
               + " ".join(f"{c:>9s}" for c in ("latin", "kanji", "hiragana", "katakana", "ja_punct", "punct_symbol")))
-        T = defaultdict(lambda: {"p": [], "cls": defaultdict(list)})
+        T = defaultdict(lambda: {"p": [], "cls": defaultdict(list), "top2": defaultdict(list)})
         for line in open(a.target_only, encoding="utf-8"):
             r = json.loads(line)
             for e in r["logprobs"]:
                 p = math.exp(e[1]); t = T[r["group"]]
                 t["p"].append(p)
-                t["cls"][char_class(bytes(e[2]).decode("utf-8", "replace") if e[2] else e[0])].append(p)
+                c = char_class(bytes(e[2]).decode("utf-8", "replace") if e[2] else e[0])
+                t["cls"][c].append(p)
+                if len(e) > 3 and e[3]:  # top-k logprobs of the entry: probability mass of the two best candidates
+                    t["top2"][c].append(sum(math.exp(x) for x in e[3][:2]))
         for name in order:
             t = T[name]; p = t["p"]
             cm = {c: sum(v) / len(v) for c, v in t["cls"].items() if len(v) >= 20}
+            t2 = {c: sum(v) / len(v) for c, v in t["top2"].items() if len(v) >= 20}
             conf[name] = {"mean_p": sum(p) / len(p), "share_p_lt_0.5": sum(x < 0.5 for x in p) / len(p),
-                          "share_p_lt_0.8": sum(x < 0.8 for x in p) / len(p), "mean_p_by_class": cm}
+                          "share_p_lt_0.8": sum(x < 0.8 for x in p) / len(p), "mean_p_by_class": cm,
+                          "top2_mass_by_class": t2}
             print(f"  {name:10s} {conf[name]['mean_p']:7.3f} {conf[name]['share_p_lt_0.5']:6.3f} "
                   f"{conf[name]['share_p_lt_0.8']:6.3f} |                  " + " ".join(
                       f"{cm[c]:9.3f}" if c in cm else f"{'-':>9s}"

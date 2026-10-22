@@ -25,6 +25,7 @@ page says which parts were mine and which were done by the assistant, so that re
 
 ## How to check the work
 
-Every number in the documents comes from a file in [`results/summary/`](../results/summary/).
+The numbers in the documents come from files in [`results/summary/`](../results/summary/), and the documents name
+the file next to each result.
 [`scripts/run_benchmark.sh`](../scripts/run_benchmark.sh) reproduces the main experiment with one command and compares
 the result with the published numbers, and [`tests/`](../tests/) checks the greedy-equivalence results.
