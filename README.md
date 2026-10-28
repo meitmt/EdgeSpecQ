@@ -33,8 +33,9 @@ evaluated.
   eight serial GEMVs per round over a 33 MiB matrix that fits in a desktop GPU's 48 MB L2 but not in the Jetson's
   2 MB.
 - **Fixed without retraining:** a quantized, reduced-vocabulary drafter whose kept rows are copied exactly from the
-  official F16 GGUF (regenerated bit for bit from this repository), four llama.cpp fixes (one submitted upstream as
-  [ggml-org/llama.cpp#30858](https://github.com/ggml-org/llama.cpp/pull/30858)) and a per-device draft length.
+  official F16 GGUF (regenerated bit for bit from this repository), four llama.cpp fixes (a reworked version of
+  one is under review upstream as [ggml-org/llama.cpp#31268](https://github.com/ggml-org/llama.cpp/pull/31268))
+  and a per-device draft length.
 - **The gain follows the device's verification cost:** verifying 9 tokens costs 1.07× a single-token decode on
   the Jetson, 1.6× on the RTX 5070 and 1.8× on the phone NPU. On the phone CPU speculation slows decoding down.
 - **Japanese gets about 70 % of the English speedup.** Acceptance drops most on kanji, where the target itself is

@@ -77,10 +77,10 @@ target-only runtime:
   keeps 95.5 % of the full-vocabulary accepted length at 32k, generic corpora only 85 %, because LFM2.5's
   Markdown, LaTeX and special-whitespace tokens are rare in generic text.
 - **Fix the runtime.** C1 sends the Markov head's short-K GEMV to the faster MMQ kernel. C2 uses a better MMVQ
-  layout on Jetson Orin (target-only decode +15 % for Q4_K_M models; submitted upstream as
-  ggml-org/llama.cpp#30858). C3 removes per-token copies introduced upstream in #29622. C4 keeps the Markov chain in
-  the draft vocabulary instead of scattering to 128k at every position; without it the reduced vocabulary is a net
-  loss on the desktop GPU (about 1.85× → 1.72×).
+  layout on Jetson Orin (target-only decode +15 % for Q4_K_M models; a reworked version is under review
+  upstream as ggml-org/llama.cpp#31268). C3 removes per-token copies introduced upstream in #29622. C4 keeps the
+  Markov chain in the draft vocabulary instead of scattering to 128k at every position; without it the reduced
+  vocabulary is a net loss on the desktop GPU (about 1.85× → 1.72×).
 - **Set the draft length per device:** 6 on Jetson, 8 on the desktop GPU and phone NPU.
 
 In the factory-default 25 W mode the same configuration gives 3.07× (75.9 t/s).

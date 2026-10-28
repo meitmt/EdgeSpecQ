@@ -9,8 +9,9 @@ page says which parts were mine and which were done by the assistant, so that re
   greedy-equivalence criteria.
 - Directed the work: which leads to follow, which fixes to keep, and what to submit upstream.
 - Reviewed the code and checked the results and conclusions before they went into the documents.
-- Wrote the description of the llama.cpp pull request
-  ([ggml-org/llama.cpp#30858](https://github.com/ggml-org/llama.cpp/pull/30858)) myself, as llama.cpp's
+- Wrote the descriptions of the llama.cpp pull requests
+  ([ggml-org/llama.cpp#30858](https://github.com/ggml-org/llama.cpp/pull/30858) and its reworked version
+  [ggml-org/llama.cpp#31268](https://github.com/ggml-org/llama.cpp/pull/31268)) myself, as llama.cpp's
   contribution guidelines require.
 
 ## What the assistant did, under my direction

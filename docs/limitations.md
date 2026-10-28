@@ -140,4 +140,4 @@ Notes that hold for both matrices:
 
 All measurements pin llama.cpp `620d2225c`, except the C2 upstream measurements (master `7951f601e`,
 `results/summary/upstream_c2_jetson/`). The C1, C3 and C4 patches have not been re-validated on newer commits;
-C2 is under review upstream.
+a reworked version of C2 is under review upstream (ggml-org/llama.cpp#31268, validated on `7894e8b92`).

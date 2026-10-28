@@ -359,9 +359,12 @@ Also measured:
 - Task quality (accuracy) was not scored. Under greedy decoding the drafter can change outputs only at near-ties
   (§7), so drafter choice is not expected to change quality materially; this was not measured. Sampling quality
   was not evaluated.
-- Upstream status: C2 has been submitted to llama.cpp in an Orin-only form
-  ([ggml-org/llama.cpp#30858](https://github.com/ggml-org/llama.cpp/pull/30858), under review) and validated on
-  llama.cpp `7951f601e` (§5). C1, C3 and C4 are validated patches on `620d2225c` and have not been re-validated on newer
+- Upstream status: C2 was first submitted to llama.cpp in an Orin-only form
+  ([ggml-org/llama.cpp#30858](https://github.com/ggml-org/llama.cpp/pull/30858)) and validated on llama.cpp
+  `7951f601e` (§5). Following the maintainer's review, it was reworked as a Jetson Orin entry of the CUDA MMVQ
+  parameter table that applies to nine quantization types and resubmitted
+  ([ggml-org/llama.cpp#31268](https://github.com/ggml-org/llama.cpp/pull/31268), under review; validated on
+  `7894e8b92`). C1, C3 and C4 are validated patches on `620d2225c` and have not been re-validated on newer
   commits.
 - The speedups are for decoding only; whole-request latency (image encoding, prefill) was not compared.
 
