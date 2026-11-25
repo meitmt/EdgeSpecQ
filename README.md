@@ -4,7 +4,7 @@ Quantized DSpark speculative decoding for Liquid AI's LFM2.5-VL-3B on edge devic
 Super, a Snapdragon 8 Elite phone (Hexagon NPU and CPU) and an RTX 5070, all through llama.cpp. Where the time goes
 on each device, what fixes it without retraining, and how to deploy it.
 
-An independent project; not affiliated with Liquid AI.
+An independent project by [Teng Mei](https://meitmt.github.io/); not affiliated with Liquid AI.
 
 ## Results
 
